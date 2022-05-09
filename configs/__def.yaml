@@ -1,0 +1,16 @@
+# Documentation for config.yaml
+
+# @port                           port number. default to be 3000
+# @cluster                        number of workers. default to be 1, i.e. no cluster
+
+# @mysql.host                     MySQL domain. default to be 'localhost'
+# @mysql.port                     MySQL port. default to be 3306
+# @mysql.username                 MySQL username. required
+# @mysql.password                 MySQL password. required
+# @mysql.database                 default database to be used
+# @mysql.sync                     whether to sync DB structure on server start
+# @mysql.log                      whether to enable sequelize SQL log
+
+# @redis                          Redis socket configuration. please check https://github.com/dabroek/node-cache-manager-redis-store#usage-examples
+# @redis.host                     Redis domain. default to be localhost
+# @redis.port                     Redis port. default to be 3306

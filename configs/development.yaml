@@ -1,0 +1,15 @@
+port: 9090
+cluster: 1
+
+mysql:
+  host: localhost
+  port: 3306
+  username: root
+  password: password
+  sync: false
+  log: true
+
+# to use redis with cache manager
+# redis:
+#   host: 'localhost'
+#   port: 6379

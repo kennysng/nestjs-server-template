@@ -1,0 +1,7 @@
+{
+  "watch": [
+    "configs/**/*.yaml"
+  ],
+  "exec": "pnpm start:dev",
+  "restartable": "rs"
+}
