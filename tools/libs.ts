@@ -30,7 +30,6 @@ export function stringify({
 
 export function parse(lines: string[]): IImport {
   const line = lines.map((l) => l.trim()).join('');
-  console.log(line);
 
   const type = line.startsWith('import type '),
     asIndex = line.indexOf(' * as '),
