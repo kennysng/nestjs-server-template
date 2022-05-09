@@ -1,4 +1,4 @@
-port: 9090
+port: 8080
 cluster: 1
 
 mysql:
@@ -11,5 +11,5 @@ mysql:
 
 # to use redis with cache manager
 # redis:
-#   host: 'localhost'
+#   host: localhost
 #   port: 6379
