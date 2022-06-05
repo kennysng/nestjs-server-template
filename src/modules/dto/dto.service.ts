@@ -33,7 +33,6 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
    * create relationships
    * @param instances T[]
    * @param transaction sequelize.Transaction
-   *
    */
   protected async createRelationships(
     instances: T[],
@@ -44,7 +43,6 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
    * update relationships
    * @param instances T[]
    * @param transaction sequelize.Transaction
-   *
    */
   protected async updateRelationships(
     instances: T[],
