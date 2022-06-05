@@ -38,3 +38,6 @@ coverage
 # old files
 *.old
 *.backup
+
+# local files
+*.env
