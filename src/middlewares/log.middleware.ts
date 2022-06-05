@@ -13,13 +13,16 @@ export class LogMiddleware implements NestMiddleware {
     logger.log(
       `${method} ${url} from ip=${ip} Start (content-length = ${contentLength})`,
     );
+    const authorization = request.header('authorization');
+    const deviceToken = request.header('x-device-token');
+    if (authorization) logger.log(`Authorization: ${authorization}`);
+    if (deviceToken) logger.log(`X-Device-Token: ${deviceToken}`);
     if (contentLength) logger.log(`body = ${JSON.stringify(request.body)}`);
     response.on('close', () => {
       const { statusCode } = response;
+      logger.log(`${method} ${url} End with code=${statusCode}`);
       logger.log(
-        `${method} ${url} End with code=${statusCode} (content-length = ${
-          response.getHeader('content-length') || 0
-        })`,
+        `content-length = ${response.getHeader('content-length') || 0}`,
       );
     });
     next();
