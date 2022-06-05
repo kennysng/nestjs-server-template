@@ -7,8 +7,17 @@ export async function logSection<T>(
 ) {
   try {
     logger.debug(`${name} start`);
-    return await callback();
-  } finally {
+    const result = await callback();
     logger.debug(`${name} end`);
+    return result;
+  } catch (e) {
+    logger.error(`${name} error: ${e.message}`);
+    if (e.errors) {
+      for (const error of e.errors) {
+        logger.error(`error: ${error.message}`);
+      }
+    } else {
+      logger.error(e.stack);
+    }
   }
 }
