@@ -16,6 +16,15 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
   ) {
     super();
     this.logger = new Logger(this.constructor.name);
+    this.on('beforeCreate', (i) =>
+      this.logger.debug(`[create] ${this.toString(i)}`),
+    );
+    this.on('beforeUpdate', (i) =>
+      this.logger.debug(`[update] ${this.toString(i)}`),
+    );
+    this.on('beforeDestroy', (i) =>
+      this.logger.debug(`[destroy] ${this.toString(i)}`),
+    );
   }
 
   /* eslint-disable @typescript-eslint/no-unused-vars */
@@ -54,8 +63,14 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
   /* eslint-enable @typescript-eslint/no-unused-vars */
   /* eslint-enable @typescript-eslint/no-empty-function */
 
-  public on(event: 'beforeSave', callback: (instance: T) => void);
-  public on(event: 'afterSave', callback: (instance: T, created?: T) => void);
+  public on(
+    event: 'beforeSave',
+    callback: (type: 'create' | 'update', instance: T) => void,
+  );
+  public on(
+    event: 'afterSave',
+    callback: (type: 'create' | 'update', instance: T, created?: T) => void,
+  );
   public on(event: 'beforeCreate', callback: (instance: T) => void);
   public on(event: 'afterCreate', callback: (instance: T, created?: T) => void);
   public on(event: 'beforeUpdate', callback: (instance: T) => void);
@@ -113,14 +128,14 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       // skip if empty
       if (!instances.length) return [];
 
-      // assign createdAt, creator and updater
+      // assign createdAt
       for (const instance of instances) {
         instance['createdAt'] = new Date();
       }
 
       // create
       for (const instance of instances) {
-        this.emit('beforeSave', instance);
+        this.emit('beforeSave', 'create', instance);
         this.emit('beforeCreate', instance);
       }
       const result = (await this.model.bulkCreate(instances, {
@@ -132,7 +147,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       for (let i = 0, length = instances.length; i < length; i += 1) {
         const instance = instances[i];
         const created = result[i];
-        this.emit('afterSave', instance, created);
+        this.emit('afterSave', 'create', instance, created);
         this.emit('afterCreate', instance, created);
       }
 
@@ -237,7 +252,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
           ? this.model.scope(optionsOrScope)
           : this.model;
       const options: FindOptions<T> =
-        typeof optionsOrScope === 'string' ? {} : optionsOrScope;
+        (typeof optionsOrScope !== 'string' && optionsOrScope) || {};
       options.where = deepmerge<WhereOptions<T>>(options.where || {}, {
         id,
       } as WhereOptions<T>);
@@ -278,7 +293,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       const newInstances = instances.filter((i) => !i.id);
       const existingInst = instances.filter((i) => i.id);
 
-      // assign updatedAt and updater
+      // assign updatedAt
       for (const instance of existingInst) {
         instance['updatedAt'] = new Date();
       }
@@ -286,13 +301,13 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       await Promise.all([
         this.create(newInstances, transaction),
         ...existingInst.map((i) => {
-          this.emit('beforeSave', i);
+          this.emit('beforeSave', 'update', i);
           this.emit('beforeUpdate', i);
           const result = this.model.update(i, {
             where: { id: i.id } as WhereOptions<T>,
             transaction,
           });
-          this.emit('afterSave', i);
+          this.emit('afterSave', 'update', i);
           this.emit('afterUpdate', i);
           return result;
         }),
@@ -312,13 +327,13 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     } else {
       instances['updatedAt'] = new Date();
 
-      this.emit('beforeSave', instances);
+      this.emit('beforeSave', 'update', instances);
       this.emit('beforeUpdate', instances);
       await this.model.update(instances, {
         where: { id: instances.id } as WhereOptions<T>,
         transaction,
       });
-      this.emit('afterSave', instances);
+      this.emit('afterSave', 'update', instances);
       this.emit('afterUpdate', instances);
 
       // update relationships
@@ -426,5 +441,13 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
 
       return target;
     }
+  }
+
+  public toJSON(instance: T) {
+    return instance;
+  }
+
+  public toString(instance: T) {
+    return JSON.stringify(this.toJSON(instance));
   }
 }
