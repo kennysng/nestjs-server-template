@@ -296,7 +296,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         instance['updatedAt'] = new Date();
       }
 
-      await Promise.all([
+      const [created] = await Promise.all([
         this.create(newInstances, transaction),
         ...existingInst.map((i) => {
           this.emit('beforeSave', 'update', i);
@@ -317,7 +317,11 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       );
 
       return this.find(
-        { where: { id: existingInst.map((i) => i.id) } as WhereOptions<T> },
+        {
+          where: {
+            id: [...created, ...existingInst].map((i) => i.id),
+          } as WhereOptions<T>,
+        },
         transaction,
       );
     } else if (!instances.id) {
