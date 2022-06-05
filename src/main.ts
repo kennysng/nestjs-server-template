@@ -12,7 +12,6 @@ import { Sequelize } from 'sequelize-typescript';
 import { AppModule } from './app.module';
 import { ConfigService } from './config.service';
 import { PrimaryModule } from './primary.module';
-import { inTransaction } from './utils/sequelize';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
