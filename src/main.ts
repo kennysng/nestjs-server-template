@@ -4,6 +4,7 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import * as _cluster from 'cluster';
 import * as compression from 'compression';
+import dotenv = require('dotenv');
 import helmet from 'helmet';
 import { cpus } from 'os';
 import { Sequelize } from 'sequelize-typescript';
@@ -11,8 +12,11 @@ import { Sequelize } from 'sequelize-typescript';
 import { AppModule } from './app.module';
 import { ConfigService } from './config.service';
 import { PrimaryModule } from './primary.module';
+import { inTransaction } from './utils/sequelize';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
+
+dotenv.config();
 
 // logger
 const logger = new Logger('NestApplication');
@@ -74,8 +78,12 @@ clusterize(
   },
   async (app) => {
     const configService = app.get(ConfigService);
-    if (configService.mysql.sync) {
-      const sequelize = app.get(Sequelize);
+    const sequelize = app.get(Sequelize);
+
+    // rebuild database structure
+    if (configService.mysql.rebuild) {
+      await sequelize.dropSchema('goen_dev', {});
+      await sequelize.createSchema('goen_dev', {});
       await sequelize.sync({ alter: true });
     }
   },

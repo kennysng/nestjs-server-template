@@ -8,7 +8,7 @@ export abstract class IConfig {
     username: string;
     password: string;
     database?: string;
-    sync?: boolean;
+    rebuild?: boolean;
     log?: boolean;
   };
 
