@@ -4,10 +4,6 @@
 |-------------------------------|-----------|-------------------------------------------------|
 | port                          | 3000      | port number                                     |
 | cluster                       | 1         | number of workers                               |
-| auth.expires_in.access_token  | 1h        | available duration of access token              |
-| auth.expires_in.refresh_token | 365d      | available duration of refresh token             |
-| auth.secret.access_token      |           | secret seed for generating access token         |
-| auth.secret.refresh_token     |           | secret seed for generating refresh token        |
 | mysql.host                    | localhost | MySQL domain                                    |
 | mysql.port                    | 3306      | MySQL port                                      |
 | mysql.username                |           | MySQL username                                  |
