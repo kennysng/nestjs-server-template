@@ -83,6 +83,20 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     return this;
   }
 
+  public getPrimaryKey(instance: T) {
+    let id: ID | undefined = instance.id;
+    if (!id) {
+      id =
+        (typeof instance.getDataValue === 'function' &&
+          instance.getDataValue('id')) ||
+        undefined;
+    }
+    if (!id) {
+      id = instance['dataValues']?.id;
+    }
+    return id;
+  }
+
   /**
    * create instance
    * @param instance Partial<T>
@@ -159,13 +173,21 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
 
       // find
       if (isSingle) {
-        return options
-          ? this.findById(result[0].id, transaction, options)
-          : result[0];
+        if (options) {
+          return this.findById(
+            this.getPrimaryKey(result[0]) as ID,
+            transaction,
+            options,
+          );
+        } else {
+          return result[0];
+        }
       } else if (options) {
         return this.find(
           {
-            where: { id: result.map((i) => i.id) } as WhereOptions<T>,
+            where: {
+              id: result.map((i) => this.getPrimaryKey(i)),
+            } as WhereOptions<T>,
             ...(options || {}),
           },
           transaction,
@@ -297,8 +319,8 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       if (!instances.length) return [];
 
       // create or update (note no delete)
-      const newInstances = instances.filter((i) => !i.id);
-      const existingInst = instances.filter((i) => i.id);
+      const newInstances = instances.filter((i) => !this.getPrimaryKey(i));
+      const existingInst = instances.filter((i) => this.getPrimaryKey(i));
 
       // assign updatedAt
       for (const instance of existingInst) {
@@ -311,7 +333,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
           this.emit('beforeSave', 'update', i);
           this.emit('beforeUpdate', i);
           const result = this.model.update(i, {
-            where: { id: i.id } as WhereOptions<T>,
+            where: { id: this.getPrimaryKey(i) } as WhereOptions<T>,
             transaction,
           });
           this.emit('afterSave', 'update', i);
@@ -328,12 +350,12 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       return this.find(
         {
           where: {
-            id: [...created, ...existingInst].map((i) => i.id),
+            id: [...created, ...existingInst].map((i) => this.getPrimaryKey(i)),
           } as WhereOptions<T>,
         },
         transaction,
       );
-    } else if (!instances.id) {
+    } else if (!this.getPrimaryKey(instances)) {
       return this.create(instances, transaction);
     } else {
       instances['updatedAt'] = new Date();
@@ -341,7 +363,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       this.emit('beforeSave', 'update', instances);
       this.emit('beforeUpdate', instances);
       await this.model.update(instances, {
-        where: { id: instances.id } as WhereOptions<T>,
+        where: { id: this.getPrimaryKey(instances) } as WhereOptions<T>,
         transaction,
       });
       this.emit('afterSave', 'update', instances);
@@ -352,7 +374,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         this.updateRelationships([instances], transaction),
       );
 
-      return this.findById(instances.id, transaction);
+      return this.findById(this.getPrimaryKey(instances), transaction);
     }
   }
 
@@ -373,7 +395,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       const targets = await this.find(
         {
           where: {
-            id: instances.map((i) => i.id).filter((id) => id),
+            id: instances.map((i) => this.getPrimaryKey(i)).filter((id) => id),
           } as WhereOptions<T>,
         },
         transaction,
@@ -387,7 +409,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
           instances.map((i) => {
             this.emit('beforeDestroy', i);
             const result = this.model.update(i, {
-              where: { id: i.id } as WhereOptions<T>,
+              where: { id: this.getPrimaryKey(i) } as WhereOptions<T>,
               transaction,
             });
             this.emit('afterDestroy', i);
@@ -399,7 +421,9 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
           this.emit('beforeDestroy', instance);
         }
         await this.model.destroy({
-          where: { id: targets.map((i) => i.id) } as WhereOptions<T>,
+          where: {
+            id: targets.map((i) => this.getPrimaryKey(i)),
+          } as WhereOptions<T>,
           transaction,
         });
         for (const instance of instances) {
