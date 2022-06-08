@@ -7,7 +7,7 @@ mysql:
   username: goen
   password: password
   database: goen_dev
-  sync: false
+  rebuild: false
   log: true
 
 redis:
