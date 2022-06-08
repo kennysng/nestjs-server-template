@@ -81,8 +81,7 @@ clusterize(
 
     // rebuild database structure
     if (configService.mysql.rebuild) {
-      await sequelize.dropSchema('goen_dev', {});
-      await sequelize.createSchema('goen_dev', {});
+      // TODO drop and create schema
       await sequelize.sync({ alter: true });
     }
   },

@@ -8,14 +8,16 @@ import { logSection } from 'src/utils';
 import { inTransaction } from 'src/utils/sequelize';
 
 export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
+  protected readonly logger: Logger;
+
   constructor(
     protected readonly sequelize: Sequelize,
     protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
     protected readonly deleteMode: 'deletedAt' | 'destroy' = 'destroy',
-    protected readonly logger?: Logger,
+    logger?: Logger,
   ) {
     super();
-    this.logger = new Logger(this.constructor.name);
+    this.logger = logger || new Logger(this.constructor.name);
     this.on('beforeCreate', (i) =>
       this.logger.debug(`[create] ${this.toString(i)}`),
     );
@@ -71,6 +73,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
   );
   public on(event: 'beforeCreate', callback: (instance: T) => void);
   public on(event: 'afterCreate', callback: (instance: T, created?: T) => void);
+  public on(event: 'afterFind', callback: (instance: T) => void);
   public on(event: 'beforeUpdate', callback: (instance: T) => void);
   public on(event: 'afterUpdate', callback: (instance: T) => void);
   public on(event: 'beforeDestroy', callback: (instance: T) => void);
@@ -192,7 +195,9 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     } else {
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
-      return (await model_.findAll(options)) as unknown as T[];
+      const result = (await model_.findAll(options)) as unknown as T[];
+      for (const i of result) this.emit('afterFind', i);
+      return result;
     }
   }
 
@@ -215,7 +220,9 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     } else {
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
-      return (await model_.findOne(options)) as T;
+      const result = (await model_.findOne(options)) as T;
+      if (result) this.emit('afterFind', result);
+      return result;
     }
   }
 
@@ -255,7 +262,9 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         id,
       } as WhereOptions<T>);
       options.transaction = options.transaction || transaction;
-      return (await model_.findOne(options)) as T;
+      const result = (await model_.findOne(options)) as T;
+      if (result) this.emit('afterFind', result);
+      return result;
     }
   }
 
