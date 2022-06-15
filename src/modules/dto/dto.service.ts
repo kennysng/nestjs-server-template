@@ -313,7 +313,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       } as WhereOptions<T>);
       options.transaction = options.transaction || transaction;
       const result = (await model_.findOne(options)) as T;
-      await this.emit('afterFind', [result]);
+      await this.emit('afterFind', result ? [result] : []);
       return result;
     }
   }
