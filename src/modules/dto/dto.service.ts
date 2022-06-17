@@ -247,7 +247,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
       const result = (await model_.findAll(options)) as unknown as T[];
-      await this.emit('afterFind', result);
+      if (result.length) await this.emit('afterFind', result);
       return result;
     }
   }
@@ -272,7 +272,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
       const result = (await model_.findOne(options)) as T;
-      await this.emit('afterFind', [result]);
+      if (result) await this.emit('afterFind', [result]);
       return result;
     }
   }
@@ -314,7 +314,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       } as WhereOptions<T>);
       options.transaction = options.transaction || transaction;
       const result = (await model_.findOne(options)) as T;
-      await this.emit('afterFind', result ? [result] : []);
+      if (result) await this.emit('afterFind', [result]);
       return result;
     }
   }
@@ -356,8 +356,10 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         instance['updatedAt'] = new Date();
       }
 
-      await this.emit('beforeSave', 'update', existingInst);
-      await this.emit('beforeUpdate', existingInst);
+      if (existingInst.length) {
+        await this.emit('beforeSave', 'update', existingInst);
+        await this.emit('beforeUpdate', existingInst);
+      }
       const [created] = await Promise.all([
         this.create(newInstances, transaction),
         ...existingInst.map(
@@ -368,13 +370,15 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
             }),
         ),
       ]);
-      await this.emit('afterSave', 'update', existingInst);
-      await this.emit('afterUpdate', existingInst);
+      if (existingInst.length) {
+        await this.emit('afterSave', 'update', existingInst);
+        await this.emit('afterUpdate', existingInst);
 
-      // update relationships
-      await logSection(this.logger, 'updateRelationships', () =>
-        this.updateRelationships(existingInst, transaction),
-      );
+        // update relationships
+        await logSection(this.logger, 'updateRelationships', () =>
+          this.updateRelationships(existingInst, transaction),
+        );
+      }
 
       return this.find(
         {
@@ -434,18 +438,20 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       }
 
       if (this.deleteMode === 'deletedAt') {
-        await this.emit('beforeDestroy', instances);
-        await Promise.all(
-          instances.map(
-            async (i) =>
-              await this.model.update(i, {
-                where: { id: this.getPrimaryKey(i) } as WhereOptions<T>,
-                transaction,
-              }),
-          ),
-        );
-        await this.emit('afterDestroy', instances);
-      } else {
+        if (instances.length) {
+          await this.emit('beforeDestroy', instances);
+          await Promise.all(
+            instances.map(
+              async (i) =>
+                await this.model.update(i, {
+                  where: { id: this.getPrimaryKey(i) } as WhereOptions<T>,
+                  transaction,
+                }),
+            ),
+          );
+          await this.emit('afterDestroy', instances);
+        }
+      } else if (instances.length) {
         await this.emit('beforeDestroy', instances);
         await this.model.destroy({
           where: {
@@ -456,10 +462,12 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         await this.emit('afterDestroy', instances);
       }
 
-      // delete relationships
-      await logSection(this.logger, 'deleteRelationships', () =>
-        this.deleteRelationships(instances, transaction),
-      );
+      if (instances.length) {
+        // delete relationships
+        await logSection(this.logger, 'deleteRelationships', () =>
+          this.deleteRelationships(instances, transaction),
+        );
+      }
 
       return this.deleteMode === 'deletedAt' ? instances : targets;
     }
