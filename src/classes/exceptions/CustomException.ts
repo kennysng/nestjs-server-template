@@ -6,19 +6,20 @@ export class CustomException extends HttpException {
     ENTITY_NOT_FOUND: new CustomException('E400001', 'Entity not Found'),
   };
 
-  public static throw(e: Error): CustomException {
+  public static throw(
+    e: Error,
+    statusCode = HttpStatus.INTERNAL_SERVER_ERROR,
+  ): CustomException {
     if (e instanceof CustomException) {
       throw e;
     } else if (e instanceof HttpException) {
-      const statusCode = e.getStatus();
       throw new CustomException(
         `E${statusCode}000`,
         e.message,
-        statusCode,
+        e.getStatus(),
         e.stack,
       );
     } else {
-      const statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
       throw new CustomException(
         `E${statusCode}000`,
         e.message,
