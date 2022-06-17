@@ -1,9 +1,7 @@
 import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
 
-import { HttpStatus } from '@nestjs/common';
-
-import { CustomHttpException } from 'src/classes/exceptions/CustomHttpException';
+import { CustomException } from 'src/classes/exceptions/CustomException';
 
 export async function inTransaction<T>(
   sequelize: Sequelize,
@@ -20,14 +18,7 @@ export async function inTransaction<T>(
       await transaction.rollback();
       rollback = true;
     }
-    if (
-      process.env.NODE_ENV === 'production' ||
-      e instanceof CustomHttpException
-    )
-      throw e;
-    const error = new CustomHttpException(e, HttpStatus.INTERNAL_SERVER_ERROR);
-    error.stack = e.stack || error.stack;
-    throw error;
+    CustomException.throw(e);
   } finally {
     if (!withTransaction && !rollback) await transaction.commit();
   }

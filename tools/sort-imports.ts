@@ -1,6 +1,7 @@
 import { promises } from 'fs';
 import minimist = require('minimist');
 import { resolve } from 'path';
+import { CustomException } from '../src/classes/exceptions/CustomException';
 import { IImport, parse, sort, stringify } from './libs';
 const { lstat, readdir, readFile, writeFile } = promises;
 
@@ -71,9 +72,7 @@ async function fix(path: string): Promise<void> {
       await writeFile(path, lines.join('\n'), 'utf-8');
       console.log(`- sort '${path}'`);
     } catch (e) {
-      const e_ = new Error(`fail to sort: '${path}'`);
-      e_.stack = e.stack + '\n\n causing: ' + e_.stack;
-      throw e_;
+      CustomException.throw(e);
     }
   }
 }

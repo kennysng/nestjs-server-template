@@ -3,6 +3,7 @@ import deepmerge = require('deepmerge');
 import EventEmitter = require('events');
 import { FindOptions, Transaction, WhereOptions } from 'sequelize';
 import { Model, Sequelize } from 'sequelize-typescript';
+import { CustomException } from 'src/classes/exceptions/CustomException';
 
 import { logSection } from 'src/utils';
 import { inTransaction } from 'src/utils/sequelize';
@@ -477,6 +478,8 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       );
     } else {
       const target = await this.findById(id, transaction);
+      if (!target) throw CustomException.exceptions.ENTITY_NOT_FOUND;
+
       target['deletedAt'] = new Date();
 
       await this.emit('beforeDestroy', [target]);

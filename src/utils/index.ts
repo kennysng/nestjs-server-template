@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
 
+import { CustomException } from 'src/classes/exceptions/CustomException';
+
 export async function logSection<T>(
   logger: Logger,
   name: string,
@@ -19,5 +21,6 @@ export async function logSection<T>(
     } else {
       logger.error(e.stack);
     }
+    CustomException.throw(e);
   }
 }

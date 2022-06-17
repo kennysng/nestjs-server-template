@@ -10,11 +10,11 @@ import { TerminusModule } from '@nestjs/terminus';
 import * as redisStore from 'cache-manager-redis-store';
 
 import { AppController } from './app.controller';
+import { AppService } from './app.service';
 import { ConfigModule } from './config.module';
 import { ConfigService } from './config.service';
 import middlewares from './middlewares';
 import models from './models';
-import { AppService } from './app.service';
 
 const sequelizeLogger = new Logger('Sequelize', { timestamp: true });
 
