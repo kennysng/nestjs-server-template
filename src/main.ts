@@ -11,6 +11,7 @@ import { Sequelize } from 'sequelize-typescript';
 
 import { AppModule } from './app.module';
 import { ConfigService } from './config.service';
+import appFilters from './filters';
 import { PrimaryModule } from './primary.module';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
@@ -71,6 +72,7 @@ clusterize(
   async (app) => {
     app.use(helmet());
     app.use(compression());
+    app.useGlobalFilters(...appFilters());
     const configService = app.get(ConfigService);
     const port = configService.port || 3000;
     await app.listen(port);
