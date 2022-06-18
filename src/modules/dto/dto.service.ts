@@ -3,8 +3,8 @@ import deepmerge = require('deepmerge');
 import EventEmitter = require('events');
 import { FindOptions, Transaction, WhereOptions } from 'sequelize';
 import { Model, Sequelize } from 'sequelize-typescript';
-import { CustomException } from 'src/classes/exceptions/CustomException';
 
+import { CustomException } from 'src/classes/exceptions/CustomException';
 import { logSection } from 'src/utils';
 import { inTransaction } from 'src/utils/sequelize';
 

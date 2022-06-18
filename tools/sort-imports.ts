@@ -72,7 +72,7 @@ async function fix(path: string): Promise<void> {
       await writeFile(path, lines.join('\n'), 'utf-8');
       console.log(`- sort '${path}'`);
     } catch (e) {
-      CustomException.throw(e);
+      CustomException.throw('sort-imports', e);
     }
   }
 }
