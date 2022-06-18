@@ -1,46 +1,52 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 
+export interface ICustomExceptionOption {
+  statusCode?: number;
+  stack?: string;
+}
+
 export class CustomException extends HttpException {
   static exceptions = {
-    SQL_ERROR: new CustomException('E500001', 'SQL Error'),
-    ENTITY_NOT_FOUND: new CustomException('E400001', 'Entity not Found'),
+    SQL_ERROR: (func: string, option?: ICustomExceptionOption) =>
+      new CustomException(func, 'E500001', 'SQL Error', option),
+    ENTITY_NOT_FOUND: (func: string, option?: ICustomExceptionOption) =>
+      new CustomException(func, 'E400001', 'Entity not Found', option),
   };
 
   public static throw(
+    func: string,
     e: Error,
-    statusCode = HttpStatus.INTERNAL_SERVER_ERROR,
+    option: ICustomExceptionOption = {},
   ): CustomException {
     if (e instanceof CustomException) {
       throw e;
     } else if (e instanceof HttpException) {
-      throw new CustomException(
-        `E${statusCode}000`,
-        e.message,
-        e.getStatus(),
-        e.stack,
-      );
+      throw new CustomException(func, `E${e.getStatus()}000`, e.message, {
+        ...option,
+        statusCode: e.getStatus(),
+        stack: e.stack,
+      });
     } else {
-      throw new CustomException(
-        `E${statusCode}000`,
-        e.message,
+      const statusCode = option?.statusCode || HttpStatus.INTERNAL_SERVER_ERROR;
+      throw new CustomException(func, `E${statusCode}000`, e.message, {
+        ...option,
         statusCode,
-        e.stack,
-      );
+        stack: e.stack,
+      });
     }
   }
 
   constructor(
+    public readonly func: string,
     public readonly errorCode: string,
     public readonly message: string,
-    public readonly statusCode = HttpStatus.INTERNAL_SERVER_ERROR,
-    public readonly subStack?: string,
+    public readonly option?: ICustomExceptionOption,
   ) {
-    super(message, statusCode);
+    super(message, option?.statusCode || HttpStatus.INTERNAL_SERVER_ERROR);
   }
 
   get stack(): string {
-    if (!super.stack) return this.subStack;
-    if (!this.subStack) return super.stack;
-    return `${super.stack}\n${this.subStack}`;
+    if (!this.option || !this.option.stack) return super.stack;
+    return `${super.stack}\n${this.option.stack}`;
   }
 }

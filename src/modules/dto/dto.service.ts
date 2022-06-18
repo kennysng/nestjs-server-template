@@ -486,7 +486,10 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       );
     } else {
       const target = await this.findById(id, transaction);
-      if (!target) throw CustomException.exceptions.ENTITY_NOT_FOUND;
+      if (!target)
+        throw CustomException.exceptions.ENTITY_NOT_FOUND(
+          `${this.constructor.name}.deleteById`,
+        );
 
       target['deletedAt'] = new Date();
 

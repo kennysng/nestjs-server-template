@@ -18,7 +18,7 @@ export async function inTransaction<T>(
       await transaction.rollback();
       rollback = true;
     }
-    CustomException.throw(e);
+    CustomException.throw('inTransaction', e);
   } finally {
     if (!withTransaction && !rollback) await transaction.commit();
   }

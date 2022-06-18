@@ -21,6 +21,6 @@ export async function logSection<T>(
     } else {
       logger.error(e.stack);
     }
-    CustomException.throw(e);
+    CustomException.throw(name, e);
   }
 }
