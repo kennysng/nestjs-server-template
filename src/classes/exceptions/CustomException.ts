@@ -2,7 +2,7 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 
 export interface ICustomExceptionOption {
   statusCode?: number;
-  stack?: string;
+  parent?: Error;
 }
 
 export class BaseCustomException extends HttpException {
@@ -16,7 +16,7 @@ export class BaseCustomException extends HttpException {
 }
 
 export class CustomException extends BaseCustomException {
-  static exceptions = {
+  static e = {
     SQL_ERROR: new BaseCustomException(
       'E500001',
       'SQL Error',
@@ -33,49 +33,47 @@ export class CustomException extends BaseCustomException {
     func: string,
     e: Error,
     option: ICustomExceptionOption = {},
-  ): CustomException {
+  ): never {
     if (e instanceof CustomException) {
       throw e;
     } else if (e instanceof BaseCustomException) {
-      throw new CustomException(e);
+      throw new CustomException(func, e.code, e.message, {
+        statusCode: e.statusCode,
+        parent: e,
+      });
     } else if (e instanceof HttpException) {
       throw new CustomException(func, `E${e.getStatus()}000`, e.message, {
         ...option,
         statusCode: e.getStatus(),
-        stack: e.stack,
+        parent: e,
       });
     } else {
       const statusCode = option?.statusCode || HttpStatus.INTERNAL_SERVER_ERROR;
       throw new CustomException(func, `E${statusCode}000`, e.message, {
         ...option,
         statusCode,
-        stack: e.stack,
+        parent: e,
       });
     }
   }
 
-  private readonly option?: ICustomExceptionOption;
-
-  constructor(error: BaseCustomException);
   constructor(
-    func: string,
-    code: string,
-    message: string,
-    option?: ICustomExceptionOption,
-  );
-  constructor(...args: any[]) {
+    public readonly func: string,
+    public readonly code: string,
+    public readonly message: string,
+    public readonly option: ICustomExceptionOption = {},
+  ) {
     super(
-      args[1] ? args[1] : (args[0] as BaseCustomException).code,
-      args[2] ? args[2] : (args[0] as BaseCustomException).message,
-      args[3]
-        ? args[3]?.statusCode || HttpStatus.INTERNAL_SERVER_ERROR
-        : (args[0] as BaseCustomException).statusCode,
+      code,
+      message + (option.parent ? ` - Thrown by ${option.parent.message}` : ''),
+      option.statusCode,
     );
-    this.option = args[3];
   }
 
   get stack(): string {
-    if (!this.option || !this.option.stack) return super.stack;
-    return `${super.stack}\n${this.option.stack}`;
+    let stack = '';
+    if (this.option.parent) stack += `${this.option.parent.stack}\n`;
+    stack += super.stack;
+    return stack;
   }
 }

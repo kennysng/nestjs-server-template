@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import deepmerge = require('deepmerge');
 import EventEmitter = require('events');
 import { FindOptions, Transaction, WhereOptions } from 'sequelize';
@@ -203,11 +203,17 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       // find
       if (isSingle) {
         if (options) {
-          return this.findById(
-            this.getPrimaryKey(result[0]) as ID,
-            transaction,
-            options,
-          );
+          try {
+            return this.findById(
+              this.getPrimaryKey(result[0]) as ID,
+              transaction,
+              options,
+            );
+          } catch (e) {
+            CustomException.throw(`${this.constructor.name}.create`, e, {
+              statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+            });
+          }
         } else {
           return result[0];
         }
@@ -314,7 +320,13 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       } as WhereOptions<T>);
       options.transaction = options.transaction || transaction;
       const result = (await model_.findOne(options)) as T;
-      if (result) await this.emit('afterFind', [result]);
+      if (!result) {
+        CustomException.throw(
+          `${this.constructor.name}.findById`,
+          CustomException.e.ENTITY_NOT_FOUND,
+        );
+      }
+      await this.emit('afterFind', [result]);
       return result;
     }
   }
@@ -485,14 +497,14 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         this.deleteById(id, transaction),
       );
     } else {
-      const target = await this.findById(id, transaction);
-      if (!target) {
-        CustomException.throw(
-          `${this.constructor.name}.deleteById`,
-          CustomException.exceptions.SQL_ERROR,
-        );
+      let target: T;
+      try {
+        target = await this.findById(id, transaction);
+      } catch (e) {
+        CustomException.throw(`${this.constructor.name}.deleteById`, e, {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        });
       }
-
       target['deletedAt'] = new Date();
 
       await this.emit('beforeDestroy', [target]);
