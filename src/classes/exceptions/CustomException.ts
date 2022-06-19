@@ -5,12 +5,28 @@ export interface ICustomExceptionOption {
   stack?: string;
 }
 
-export class CustomException extends HttpException {
-  static exceptions = {
-    SQL_ERROR: (func: string, option?: ICustomExceptionOption) =>
-      new CustomException(func, 'E500001', 'SQL Error', option),
-    ENTITY_NOT_FOUND: (func: string, option?: ICustomExceptionOption) =>
-      new CustomException(func, 'E400001', 'Entity not Found', option),
+export class BaseCustomException extends HttpException {
+  constructor(
+    public readonly code: string,
+    public readonly message: string,
+    public readonly statusCode = HttpStatus.INTERNAL_SERVER_ERROR,
+  ) {
+    super(message, statusCode);
+  }
+}
+
+export class CustomException extends BaseCustomException {
+  static exceptions: Record<string, BaseCustomException> = {
+    SQL_ERROR: new BaseCustomException(
+      'E500001',
+      'SQL Error',
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    ),
+    ENTITY_NOT_FOUND: new BaseCustomException(
+      'E404001',
+      'Entity not Found',
+      HttpStatus.NOT_FOUND,
+    ),
   };
 
   public static throw(
@@ -20,6 +36,8 @@ export class CustomException extends HttpException {
   ): CustomException {
     if (e instanceof CustomException) {
       throw e;
+    } else if (e instanceof BaseCustomException) {
+      throw new CustomException(e);
     } else if (e instanceof HttpException) {
       throw new CustomException(func, `E${e.getStatus()}000`, e.message, {
         ...option,
@@ -36,13 +54,24 @@ export class CustomException extends HttpException {
     }
   }
 
+  private readonly option?: ICustomExceptionOption;
+
+  constructor(error: BaseCustomException);
   constructor(
-    public readonly func: string,
-    public readonly errorCode: string,
-    public readonly message: string,
-    public readonly option?: ICustomExceptionOption,
-  ) {
-    super(message, option?.statusCode || HttpStatus.INTERNAL_SERVER_ERROR);
+    func: string,
+    code: string,
+    message: string,
+    option?: ICustomExceptionOption,
+  );
+  constructor(...args: any[]) {
+    super(
+      args[1] ? args[1] : (args[0] as BaseCustomException).code,
+      args[2] ? args[2] : (args[0] as BaseCustomException).message,
+      args[3]
+        ? args[3]?.statusCode || HttpStatus.INTERNAL_SERVER_ERROR
+        : (args[0] as BaseCustomException).statusCode,
+    );
+    this.option = args[3];
   }
 
   get stack(): string {
