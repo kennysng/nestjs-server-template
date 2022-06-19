@@ -16,7 +16,7 @@ export class BaseCustomException extends HttpException {
 }
 
 export class CustomException extends BaseCustomException {
-  static exceptions: Record<string, BaseCustomException> = {
+  static exceptions = {
     SQL_ERROR: new BaseCustomException(
       'E500001',
       'SQL Error',
