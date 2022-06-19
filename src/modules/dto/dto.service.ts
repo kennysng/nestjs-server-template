@@ -196,7 +196,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       await this.emit('afterCreate', instances, result);
 
       // create relationships
-      await logSection(this.logger, 'createRelationships', () => {
+      await logSection('createRelationships', this.logger, () => {
         return this.createRelationships(result, transaction);
       });
 
@@ -387,7 +387,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         await this.emit('afterUpdate', existingInst);
 
         // update relationships
-        await logSection(this.logger, 'updateRelationships', () =>
+        await logSection('updateRelationships', this.logger, () =>
           this.updateRelationships(existingInst, transaction),
         );
       }
@@ -415,7 +415,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       await this.emit('afterUpdate', [instances]);
 
       // update relationships
-      await logSection(this.logger, 'updateRelationships', () =>
+      await logSection('updateRelationships', this.logger, () =>
         this.updateRelationships([instances], transaction),
       );
 
@@ -476,7 +476,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
 
       if (instances.length) {
         // delete relationships
-        await logSection(this.logger, 'deleteRelationships', () =>
+        await logSection('deleteRelationships', this.logger, () =>
           this.deleteRelationships(instances, transaction),
         );
       }
@@ -522,7 +522,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       await this.emit('afterDestroy', [target]);
 
       // delete relationships
-      await logSection(this.logger, 'deleteRelationships', () =>
+      await logSection('deleteRelationships', this.logger, () =>
         this.deleteRelationships([target], transaction),
       );
 

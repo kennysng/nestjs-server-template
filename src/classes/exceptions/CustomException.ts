@@ -38,13 +38,13 @@ export class CustomException extends BaseCustomException {
       throw e;
     } else if (e instanceof BaseCustomException) {
       throw new CustomException(func, e.code, e.message, {
-        statusCode: e.statusCode,
+        statusCode: option.statusCode || e.statusCode,
         parent: e,
       });
     } else if (e instanceof HttpException) {
       throw new CustomException(func, `E${e.getStatus()}000`, e.message, {
         ...option,
-        statusCode: e.getStatus(),
+        statusCode: option.statusCode || e.getStatus(),
         parent: e,
       });
     } else {
