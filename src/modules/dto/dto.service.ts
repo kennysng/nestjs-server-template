@@ -1,7 +1,7 @@
 import { HttpStatus, Logger } from '@nestjs/common';
 import deepmerge = require('deepmerge');
 import EventEmitter = require('events');
-import { FindOptions, Transaction, WhereOptions } from 'sequelize';
+import { FindOptions, Includeable, Transaction, WhereOptions } from 'sequelize';
 import { Model, Sequelize } from 'sequelize-typescript';
 
 import { CustomException } from 'src/classes/exceptions/CustomException';
@@ -14,6 +14,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
   constructor(
     protected readonly sequelize: Sequelize,
     protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
+    protected readonly defaultInclude: Includeable[] = [],
     protected readonly deleteMode: 'deletedAt' | 'destroy' = 'destroy',
     logger?: Logger,
   ) {
@@ -250,6 +251,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         this.find(options, transaction, scope),
       );
     } else {
+      options.include = this.defaultInclude;
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
       const result = (await model_.findAll(options)) as unknown as T[];
@@ -275,6 +277,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
         this.findOne(options, transaction, scope),
       );
     } else {
+      options.include = this.defaultInclude;
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
       const result = (await model_.findOne(options)) as T;
@@ -318,6 +321,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
       options.where = deepmerge<WhereOptions<T>>(options.where || {}, {
         id,
       } as WhereOptions<T>);
+      options.include = this.defaultInclude;
       options.transaction = options.transaction || transaction;
       const result = (await model_.findOne(options)) as T;
       if (!result) {
