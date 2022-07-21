@@ -1,4 +1,4 @@
-import { BodyMiddleware } from './body.middleware';
+import { BodyParserMiddleware } from './body.middleware';
 import { LogMiddleware } from './log.middleware';
 
-export default [LogMiddleware, BodyMiddleware];
+export default [LogMiddleware, BodyParserMiddleware];

@@ -1,4 +1,4 @@
-import { HttpStatus, Logger } from '@nestjs/common';
+import { HttpStatus, Logger, LoggerService } from '@nestjs/common';
 import deepmerge = require('deepmerge');
 import EventEmitter = require('events');
 import { FindOptions, Includeable, Transaction, WhereOptions } from 'sequelize';
@@ -7,32 +7,47 @@ import { Model, Sequelize } from 'sequelize-typescript';
 import { CustomException } from 'src/classes/exceptions/CustomException';
 import { logSection } from 'src/utils';
 import { inTransaction } from 'src/utils/sequelize';
+import { LogService } from '../log.service';
+
+export type Options = {
+  logService?: LogService;
+  logger?: LoggerService;
+  defaultInclude?: Includeable[];
+  deleteMode?: 'deletedAt' | 'destroy';
+};
 
 export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
-  protected readonly logger: Logger;
+  protected readonly logger: LoggerService;
+  protected readonly defaultInclude: Includeable[];
+  protected readonly deleteMode: 'deletedAt' | 'destroy';
 
   constructor(
     protected readonly sequelize: Sequelize,
     protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
-    protected readonly defaultInclude: Includeable[] = [],
-    protected readonly deleteMode: 'deletedAt' | 'destroy' = 'destroy',
-    logger?: Logger,
+    options?: Options,
   ) {
     super();
-    this.logger = logger || new Logger(this.constructor.name);
+
+    this.logger =
+      options?.logger ||
+      options?.logService?.get(this.constructor.name) ||
+      new Logger(this.constructor.name);
+    this.defaultInclude = options?.defaultInclude || [];
+    this.deleteMode = options?.deleteMode || 'deletedAt';
+
     this.on('beforeCreate', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`[create] ${this.toString(i)}`);
+        this.logger.debug(`.create ${this.toString(i)}`);
       }
     });
     this.on('beforeUpdate', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`[update] ${this.toString(i)}`);
+        this.logger.debug(`.update ${this.toString(i)}`);
       }
     });
     this.on('beforeDestroy', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`[destroy] ${this.toString(i)}`);
+        this.logger.debug(`.destroy ${this.toString(i)}`);
       }
     });
   }

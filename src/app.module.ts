@@ -2,7 +2,7 @@ import type { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import type { RedisClientOptions } from 'redis';
 
 import { HttpModule } from '@nestjs/axios';
-import { CacheInterceptor, CacheModule, Logger, Module } from '@nestjs/common';
+import { CacheInterceptor, CacheModule, Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { SequelizeModule } from '@nestjs/sequelize';
@@ -15,8 +15,7 @@ import { ConfigModule } from './config.module';
 import { ConfigService } from './config.service';
 import middlewares from './middlewares';
 import models from './models';
-
-const sequelizeLogger = new Logger('Sequelize', { timestamp: true });
+import { LogService } from './modules/log.service';
 
 const modules = [];
 
@@ -28,11 +27,11 @@ const modules = [];
     // connect database
     SequelizeModule.forRootAsync({
       imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
+      inject: [ConfigService, LogService],
+      useFactory: (configService: ConfigService, logService: LogService) => ({
         dialect: 'mysql',
         logging: configService.mysql.log
-          ? (sql) => sequelizeLogger.log(sql)
+          ? (sql) => logService.get('Sequelize').log(sql)
           : false,
         host: configService.mysql.host || 'localhost',
         port: configService.mysql.port || 3306,
@@ -79,6 +78,7 @@ const modules = [];
       useClass: CacheInterceptor,
     },
     AppService,
+    LogService,
   ],
 })
 export class AppModule implements NestModule {

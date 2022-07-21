@@ -1,21 +1,28 @@
-import type { NestMiddleware } from '@nestjs/common';
+import type { LoggerService, NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
-const logger = new Logger('BodyParser', { timestamp: true });
+import { LogService } from 'src/modules/log.service';
 
 /**
  * ensure the request body is parsed to JSON
  */
 @Injectable()
-export class BodyMiddleware implements NestMiddleware {
+export class BodyParserMiddleware implements NestMiddleware {
+  protected readonly logger: LoggerService;
+
+  constructor(logService: LogService) {
+    this.logger = logService.get('BodyParser');
+  }
+
+  // @override
   use(request: Request, response: Response, next: NextFunction): void {
     if (typeof request.body === 'string') {
       try {
         request.body = JSON.parse(request.body);
         const { method, originalUrl: url } = request;
-        logger.warn(`Built-in body parser not work on ${method} ${url}`);
+        this.logger.warn(`Built-in body parser not work on ${method} ${url}`);
       } catch (e) {
         // it's not JSON
       }

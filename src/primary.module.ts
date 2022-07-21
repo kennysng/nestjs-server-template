@@ -1,11 +1,10 @@
-import { Logger, Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { SequelizeModule } from '@nestjs/sequelize';
 
 import { ConfigModule } from './config.module';
 import { ConfigService } from './config.service';
 import models from './models';
-
-const sequelizeLogger = new Logger('Sequelize', { timestamp: true });
+import { LogService } from './modules/log.service';
 
 @Module({
   imports: [
@@ -15,11 +14,11 @@ const sequelizeLogger = new Logger('Sequelize', { timestamp: true });
     // connect database
     SequelizeModule.forRootAsync({
       imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
+      inject: [ConfigService, LogService],
+      useFactory: (configService: ConfigService, logService: LogService) => ({
         dialect: 'mysql',
         logging: configService.mysql.log
-          ? (sql) => sequelizeLogger.log(sql)
+          ? (sql) => logService.get('Sequelize').log(sql)
           : false,
         host: configService.mysql.host || 'localhost',
         port: configService.mysql.port || 3306,
