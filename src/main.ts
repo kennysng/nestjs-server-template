@@ -70,7 +70,7 @@ clusterize(
   async (app) => {
     app.use(helmet());
     app.use(compression());
-    app.useGlobalFilters(...appFilters());
+    app.useGlobalFilters(...appFilters(app.get(LogService)));
     const configService = app.get(ConfigService);
     const port = configService.port || 3000;
     await app.listen(port);
