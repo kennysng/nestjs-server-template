@@ -12,7 +12,7 @@ export class ConfigService extends IConfig {
   constructor() {
     super();
 
-    const NODE_ENV = process.env.NODE_ENV || 'development';
+    const NODE_ENV = process.env.NODE_ENV || 'local';
     this.config_ = Object.freeze(
       yaml.load(
         readFileSync(

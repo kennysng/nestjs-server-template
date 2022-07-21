@@ -1,6 +1,4 @@
-import type { NestApplication } from '@nestjs/core';
-
-import { Logger } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import * as _cluster from 'cluster';
 import * as compression from 'compression';
@@ -12,29 +10,30 @@ import { Sequelize } from 'sequelize-typescript';
 import { AppModule } from './app.module';
 import { ConfigService } from './config.service';
 import appFilters from './filters';
+import { LogService } from './modules/model/log.service';
 import { PrimaryModule } from './primary.module';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
 dotenv.config();
 
-// logger
-const logger = new Logger('NestApplication');
-
 // cluster
 async function clusterize(
-  createApp: (primaryInCluster?: boolean) => Promise<NestApplication>,
-  workerCallback: (app: NestApplication) => Promise<void>,
-  primaryCallback?: (app: NestApplication) => Promise<void>,
+  createApp: (primaryInCluster?: boolean) => Promise<INestApplication>,
+  workerCallback: (app: INestApplication) => Promise<void>,
+  primaryCallback?: (app: INestApplication) => Promise<void>,
 ) {
   const noOfWorkers = +process.env.CLUSTER || 1;
-  if (cluster.isPrimary && noOfWorkers > 1) {
-    logger.log(`Primary server started on ${process.pid}`);
+  const app = await createApp(true);
+  const logger = app.get(LogService);
 
-    if (primaryCallback) primaryCallback(await createApp(true));
+  if (cluster.isPrimary && noOfWorkers > 1) {
+    logger.log('NestApplication', `Primary server started on ${process.pid}`);
+
+    if (primaryCallback) primaryCallback(app);
 
     process.on('SIGINT', () => {
-      console.log('Nest application shutting down ...');
+      logger.log('NestApplication', 'Nest application shutting down ...');
       for (const id in cluster.workers) {
         cluster.workers[id].kill();
       }
@@ -47,11 +46,14 @@ async function clusterize(
     }
 
     cluster.on('online', (worker) => {
-      logger.log(`Worker ${worker.process.pid} started`);
+      logger.log('NestApplication', `Worker ${worker.process.pid} started`);
     });
 
     cluster.on('exit', (worker) => {
-      logger.log(`Worker ${worker.process.pid} died. Restarting ...`);
+      logger.log(
+        'NestApplication',
+        `Worker ${worker.process.pid} died. Restarting ...`,
+      );
       cluster.fork();
     });
   } else if (noOfWorkers > 1) {
@@ -64,10 +66,8 @@ async function clusterize(
 }
 
 clusterize(
-  async (primaryInCluster = false) => {
-    return await NestFactory.create(
-      primaryInCluster ? PrimaryModule : AppModule,
-    );
+  (primaryInCluster = false) => {
+    return NestFactory.create(primaryInCluster ? PrimaryModule : AppModule);
   },
   async (app) => {
     app.use(helmet());
