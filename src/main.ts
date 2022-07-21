@@ -76,12 +76,21 @@ clusterize(
     await app.listen(port);
   },
   async (app) => {
-    const configService = app.get(ConfigService);
+    const config = app.get(ConfigService);
     const sequelize = app.get(Sequelize);
 
     // rebuild database structure
-    if (configService.mysql.rebuild) {
-      // TODO drop and create schema
+    if (config.mysql.rebuild) {
+      if (!config.mysql.database) {
+        throw new Error('Missing config.mysql.database');
+      }
+      await sequelize.query(
+        `DROP SCHEMA IF EXISTS \`${config.mysql.database}\`;`,
+      );
+      await sequelize.query(
+        `CREATE SCHEMA IF NOT EXISTS \`${config.mysql.database}\`;`,
+      );
+      await sequelize.query(`USE \`${config.mysql.database}\`;`);
       await sequelize.sync({ alter: true });
     }
   },
