@@ -25,6 +25,9 @@ export class Log extends Model {
   @Column(DataType.BIGINT)
   id?: number;
 
+  @Column(DataType.INTEGER)
+  pid: number;
+
   @Column(DataType.ENUM('log', 'info', 'warn', 'error'))
   type: LogType;
 
@@ -33,6 +36,9 @@ export class Log extends Model {
 
   @Column(DataType.TEXT)
   message: string;
+
+  @Column(DataType.BIGINT)
+  elapsed?: any;
 
   @AllowNull(true)
   @Column(DataType.JSON)

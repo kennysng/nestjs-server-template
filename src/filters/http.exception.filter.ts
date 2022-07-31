@@ -3,18 +3,18 @@ import type {
   ExceptionFilter,
   LoggerService,
 } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { Catch, HttpException } from '@nestjs/common';
-import { Response } from 'express';
 
-import { LogService } from 'src/modules/log.service';
+import { Logger } from 'src/logger';
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
   protected readonly logger: LoggerService;
 
-  constructor(logService: LogService) {
-    this.logger = logService.get('HttpException');
+  constructor() {
+    this.logger = new Logger('HttpException');
   }
 
   // @override

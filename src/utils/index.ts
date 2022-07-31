@@ -1,25 +1,37 @@
-import { LoggerService } from '@nestjs/common';
+import type { LoggerService } from '@nestjs/common';
 
 import { CustomException } from 'src/classes/exceptions/CustomException';
+
+type Result<T> = {
+  result?: T;
+  error?: any;
+  start: number;
+  end: number;
+};
+
+export async function logElapsed<T>(
+  callback: () => T | Promise<T>,
+): Promise<Result<T>> {
+  const now = Date.now();
+  try {
+    const result = await callback();
+    return { result, start: now, end: Date.now() };
+  } catch (error) {
+    return { error, start: now, end: Date.now() };
+  }
+}
 
 export async function logSection<T>(
   func: string,
   logger: LoggerService,
   callback: () => T | Promise<T>,
 ) {
-  try {
-    logger.debug(`.${func} start`);
-    const result = await callback();
-    logger.debug(`.${func} end`);
+  logger.debug('start'), { tag: func, elapsed: 0 };
+  const { result, error, start, end } = await logElapsed(callback);
+  if (error) {
+    CustomException.throw(func, error);
+  } else {
+    logger.debug('end', { tag: func, elapsed: end - start });
     return result;
-  } catch (e) {
-    logger.error(`.${func} ${e.message}`);
-    if (e.errors) {
-      for (const error of e.errors) {
-        logger.error(`.${func} ${error.message}`);
-      }
-    }
-    logger.error(`.${func} ${e.stack}`);
-    CustomException.throw(func, e);
   }
 }

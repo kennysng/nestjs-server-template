@@ -1,16 +1,22 @@
-import { HttpStatus, Logger, LoggerService } from '@nestjs/common';
+import type { LoggerService } from '@nestjs/common';
+import type {
+  FindOptions,
+  Includeable,
+  Transaction,
+  WhereOptions,
+} from 'sequelize';
+import type { Model, Sequelize } from 'sequelize-typescript';
+
+import { HttpStatus } from '@nestjs/common';
 import deepmerge = require('deepmerge');
 import EventEmitter = require('events');
-import { FindOptions, Includeable, Transaction, WhereOptions } from 'sequelize';
-import { Model, Sequelize } from 'sequelize-typescript';
 
 import { CustomException } from 'src/classes/exceptions/CustomException';
 import { logSection } from 'src/utils';
 import { inTransaction } from 'src/utils/sequelize';
-import { LogService } from '../log.service';
+import { Logger as GoenLogger } from '../../logger';
 
 export type Options = {
-  logService?: LogService;
   logger?: LoggerService;
   defaultInclude?: Includeable[];
   deleteMode?: 'deletedAt' | 'destroy';
@@ -28,10 +34,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
   ) {
     super();
 
-    this.logger =
-      options?.logger ||
-      options?.logService?.get(this.constructor.name) ||
-      new Logger(this.constructor.name);
+    this.logger = options?.logger || new GoenLogger(this.constructor.name);
     this.defaultInclude = options?.defaultInclude || [];
     this.deleteMode = options?.deleteMode || 'deletedAt';
 

@@ -1,4 +1,5 @@
-import { INestApplication } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
+
 import { NestFactory } from '@nestjs/core';
 import * as _cluster from 'cluster';
 import * as compression from 'compression';
@@ -10,31 +11,35 @@ import { Sequelize } from 'sequelize-typescript';
 import { AppModule } from './app.module';
 import { ConfigService } from './config.service';
 import appFilters from './filters';
-import { LogService } from './modules/log.service';
+import { Logger } from './logger';
 import { PrimaryModule } from './primary.module';
+import { logSection } from './utils';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
 dotenv.config();
 
+process.env.NODE_ENV = process.env.NODE_ENV || 'local';
+
 // cluster
 async function clusterize(
-  createApp: (primaryInCluster?: boolean) => Promise<INestApplication>,
-  workerCallback: (app: INestApplication) => Promise<void>,
-  primaryCallback?: (app: INestApplication) => Promise<void>,
+  createApp: (
+    logger: Logger,
+    primaryInCluster?: boolean,
+  ) => Promise<INestApplication>,
+  workerCallback: (app: INestApplication, logger: Logger) => Promise<void>,
+  primaryCallback?: (app: INestApplication, logger: Logger) => Promise<void>,
 ) {
-  const noOfWorkers = +process.env.CLUSTER || 1;
-  const app = await createApp(true);
-  const logger = app.get(LogService).get('NestApplication');
-  app.useLogger(logger);
+  const logger = new Logger('NestApplication');
+  const app = await createApp(logger, true);
+
+  const configService = app.get(ConfigService);
+  const noOfWorkers = configService.cluster || 1;
 
   if (cluster.isPrimary && noOfWorkers > 1) {
-    logger.log(`Primary server started on ${process.pid}`);
-
-    if (primaryCallback) primaryCallback(app);
+    if (primaryCallback) primaryCallback(app, logger);
 
     process.on('SIGINT', () => {
-      logger.log('shutting down ...');
       for (const id in cluster.workers) {
         cluster.workers[id].kill();
       }
@@ -42,40 +47,40 @@ async function clusterize(
     });
 
     const numCPUs = cpus().length;
-    for (let i = 0; i < Math.min(numCPUs, +process.env.CLUSTER || 1); i++) {
-      cluster.fork();
+    for (let i = 0; i < Math.min(numCPUs, +noOfWorkers || 1); i++) {
+      const worker = cluster.fork();
+      // re-fork if worker down
+      worker.on('exit', () => cluster.fork());
     }
-
-    cluster.on('online', (worker) => {
-      logger.log(`Worker ${worker.process.pid} started`);
-    });
-
-    cluster.on('exit', (worker) => {
-      logger.log(`Worker ${worker.process.pid} died. Restarting ...`);
-      cluster.fork();
-    });
   } else if (noOfWorkers > 1) {
-    workerCallback(await createApp());
+    workerCallback(await createApp(logger), logger);
   } else {
-    const app = await createApp();
-    primaryCallback(app);
-    workerCallback(app);
+    const app = await createApp(logger);
+    primaryCallback(app, logger);
+    workerCallback(app, logger);
   }
 }
 
 clusterize(
-  (primaryInCluster = false) => {
-    return NestFactory.create(primaryInCluster ? PrimaryModule : AppModule);
+  (logger, primaryInCluster = false) => {
+    return NestFactory.create(primaryInCluster ? PrimaryModule : AppModule, {
+      logger,
+    });
   },
-  async (app) => {
+  async (app, logger) => {
+    const now = Date.now();
     app.use(helmet());
     app.use(compression());
-    app.useGlobalFilters(...appFilters(app.get(LogService)));
+    app.useGlobalFilters(...appFilters());
     const configService = app.get(ConfigService);
     const port = configService.port || 3000;
-    await app.listen(port);
+    await app.listen(port, () =>
+      logger.log(`Worker thread listening to port ${port}`, {
+        elapsed: Date.now() - now,
+      }),
+    );
   },
-  async (app) => {
+  async (app, logger) => {
     const config = app.get(ConfigService);
     const sequelize = app.get(Sequelize);
 
@@ -84,14 +89,18 @@ clusterize(
       if (!config.mysql.database) {
         throw new Error('Missing config.mysql.database');
       }
-      await sequelize.query(
-        `DROP SCHEMA IF EXISTS \`${config.mysql.database}\`;`,
-      );
-      await sequelize.query(
-        `CREATE SCHEMA IF NOT EXISTS \`${config.mysql.database}\`;`,
-      );
-      await sequelize.query(`USE \`${config.mysql.database}\`;`);
-      await sequelize.sync({ alter: true });
+      logSection('rebuildDatabase', logger, async () => {
+        await sequelize.query(
+          `DROP SCHEMA IF EXISTS \`${config.mysql.database}\`;`,
+        );
+        await sequelize.query(
+          `CREATE SCHEMA IF NOT EXISTS \`${config.mysql.database}\`;`,
+        );
+        await sequelize.query(`USE \`${config.mysql.database}\`;`);
+        await sequelize.sync({ alter: true });
+      });
     }
+
+    logger.log('Primary thread (run only once) done');
   },
 );

@@ -5,17 +5,14 @@ import { HttpModule } from '@nestjs/axios';
 import { CacheInterceptor, CacheModule, Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
-import { SequelizeModule } from '@nestjs/sequelize';
 import { TerminusModule } from '@nestjs/terminus';
 import * as redisStore from 'cache-manager-redis-store';
 
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { ConfigModule } from './config.module';
 import { ConfigService } from './config.service';
 import middlewares from './middlewares';
-import models from './models';
-import { LogService } from './modules/log.service';
+import { DatabaseModule } from './modules/dto/dto.modules';
 
 const modules = [];
 
@@ -25,22 +22,7 @@ const modules = [];
     ConfigModule,
 
     // connect database
-    SequelizeModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService, LogService],
-      useFactory: (configService: ConfigService, logService: LogService) => ({
-        dialect: 'mysql',
-        logging: configService.mysql.log
-          ? (sql) => logService.get('Sequelize').log(sql)
-          : false,
-        host: configService.mysql.host || 'localhost',
-        port: configService.mysql.port || 3306,
-        username: configService.mysql.username,
-        password: configService.mysql.password,
-        database: configService.mysql.database,
-        models,
-      }),
-    }),
+    DatabaseModule,
 
     // enable redis cache
     CacheModule.registerAsync<RedisClientOptions>({
@@ -77,8 +59,6 @@ const modules = [];
       provide: APP_INTERCEPTOR,
       useClass: CacheInterceptor,
     },
-    AppService,
-    LogService,
   ],
 })
 export class AppModule implements NestModule {

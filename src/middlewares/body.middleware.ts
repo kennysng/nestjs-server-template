@@ -3,7 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { Injectable } from '@nestjs/common';
 
-import { LogService } from 'src/modules/log.service';
+import { Logger } from 'src/logger';
 
 /**
  * ensure the request body is parsed to JSON
@@ -12,8 +12,8 @@ import { LogService } from 'src/modules/log.service';
 export class BodyParserMiddleware implements NestMiddleware {
   protected readonly logger: LoggerService;
 
-  constructor(logService: LogService) {
-    this.logger = logService.get('BodyParser');
+  constructor() {
+    this.logger = new Logger('BodyParser');
   }
 
   // @override

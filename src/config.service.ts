@@ -12,11 +12,16 @@ export class ConfigService extends IConfig {
   constructor() {
     super();
 
-    const NODE_ENV = process.env.NODE_ENV || 'local';
     this.config_ = Object.freeze(
       yaml.load(
         readFileSync(
-          join(__dirname, '..', '..', 'configs', `${NODE_ENV}.yaml`),
+          join(
+            __dirname,
+            '..',
+            '..',
+            'configs',
+            `${process.env.NODE_ENV}.yaml`,
+          ),
           'utf8',
         ),
       ) as IConfig,
