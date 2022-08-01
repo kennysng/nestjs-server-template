@@ -29,7 +29,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
 
   constructor(
     protected readonly sequelize: Sequelize,
-    protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
+    protected readonly model: { new (): T } & typeof Model, // eslint-disable-line prettier/prettier
     options?: Options,
   ) {
     super();
@@ -151,6 +151,13 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     return id;
   }
 
+  public inTransaction<T>(
+    callback: (transaction: Transaction) => Promise<T>,
+    transaction?: Transaction,
+  ): Promise<T> {
+    return inTransaction(this.sequelize, callback, transaction);
+  }
+
   /**
    * create instance
    * @param instance Partial<T>
@@ -181,7 +188,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     options?: FindOptions<T>,
   ): Promise<T | T[]> {
     if (!transaction) {
-      return inTransaction(this.sequelize, async (transaction) =>
+      return this.inTransaction(async (transaction) =>
         Array.isArray(instances)
           ? this.create(instances, transaction, options)
           : this.create(instances, transaction, options),
@@ -265,7 +272,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     scope?: string,
   ): Promise<T[]> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         this.find(options, transaction, scope),
       );
     } else {
@@ -291,7 +298,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     scope?: string,
   ): Promise<T> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         this.findOne(options, transaction, scope),
       );
     } else {
@@ -324,7 +331,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     optionsOrScope?: FindOptions<T> | string,
   ): Promise<T> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         typeof optionsOrScope === 'string'
           ? this.findById(id, transaction, optionsOrScope)
           : this.findById(id, transaction, optionsOrScope),
@@ -372,7 +379,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
     transaction?: Transaction,
   ): Promise<T | T[]> {
     if (!transaction) {
-      return inTransaction(this.sequelize, async (transaction) =>
+      return this.inTransaction(async (transaction) =>
         Array.isArray(instances)
           ? this.update(instances, transaction)
           : this.update(instances, transaction),
@@ -453,7 +460,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
    */
   async delete(instances: T[], transaction?: Transaction): Promise<T[]> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         this.delete(instances, transaction),
       );
     } else if (!instances.length) {
@@ -515,7 +522,7 @@ export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
    */
   async deleteById(id: ID, transaction?: Transaction): Promise<T> {
     if (!transaction) {
-      return inTransaction(this.sequelize, (transaction) =>
+      return this.inTransaction((transaction) =>
         this.deleteById(id, transaction),
       );
     } else {
