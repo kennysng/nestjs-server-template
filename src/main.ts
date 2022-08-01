@@ -79,7 +79,7 @@ clusterize(
     );
   },
   async (app, logger) => {
-    logSection('PrimaryThread', logger, () => {
+    await logSection('PrimaryThread', logger, async () => {
       const config = app.get(ConfigService);
       const sequelize = app.get(Sequelize);
 
@@ -88,7 +88,7 @@ clusterize(
         if (!config.mysql.database) {
           throw new Error('Missing config.mysql.database');
         }
-        logSection('rebuildDatabase', logger, async () => {
+        await logSection('rebuildDatabase', logger, async () => {
           await sequelize.query(
             `DROP SCHEMA IF EXISTS \`${config.mysql.database}\`;`,
           );
