@@ -7,6 +7,8 @@ import { Logger } from 'src/logger';
 import models from '../../models';
 import { LogService } from './log.service';
 
+const services = [LogService];
+
 @Module({
   imports: [
     SequelizeModule.forRootAsync({
@@ -29,7 +31,7 @@ import { LogService } from './log.service';
 
     SequelizeModule.forFeature(models),
   ],
-  providers: [LogService],
-  exports: [LogService],
+  providers: services,
+  exports: services,
 })
 export class DatabaseModule {}

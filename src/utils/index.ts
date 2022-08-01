@@ -26,12 +26,12 @@ export async function logSection<T>(
   logger: LoggerService,
   callback: () => T | Promise<T>,
 ) {
-  logger.debug('start'), { tag: func, elapsed: 0 };
+  logger.debug(`${func} start`, { elapsed: 0 });
   const { result, error, start, end } = await logElapsed(callback);
   if (error) {
     CustomException.throw(func, error);
   } else {
-    logger.debug('end', { tag: func, elapsed: end - start });
+    logger.debug(`${func} end`, { elapsed: end - start });
     return result;
   }
 }

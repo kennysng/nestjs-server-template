@@ -48,9 +48,7 @@ async function clusterize(
 
     const numCPUs = cpus().length;
     for (let i = 0; i < Math.min(numCPUs, +noOfWorkers || 1); i++) {
-      const worker = cluster.fork();
-      // re-fork if worker down
-      worker.on('exit', () => cluster.fork());
+      cluster.fork();
     }
   } else if (noOfWorkers > 1) {
     workerCallback(await createApp(logger), logger);
@@ -81,26 +79,26 @@ clusterize(
     );
   },
   async (app, logger) => {
-    const config = app.get(ConfigService);
-    const sequelize = app.get(Sequelize);
+    logSection('PrimaryThread', logger, () => {
+      const config = app.get(ConfigService);
+      const sequelize = app.get(Sequelize);
 
-    // rebuild database structure
-    if (config.mysql.rebuild) {
-      if (!config.mysql.database) {
-        throw new Error('Missing config.mysql.database');
+      // rebuild database structure
+      if (config.mysql.rebuild) {
+        if (!config.mysql.database) {
+          throw new Error('Missing config.mysql.database');
+        }
+        logSection('rebuildDatabase', logger, async () => {
+          await sequelize.query(
+            `DROP SCHEMA IF EXISTS \`${config.mysql.database}\`;`,
+          );
+          await sequelize.query(
+            `CREATE SCHEMA IF NOT EXISTS \`${config.mysql.database}\`;`,
+          );
+          await sequelize.query(`USE \`${config.mysql.database}\`;`);
+          await sequelize.sync({ alter: true });
+        });
       }
-      logSection('rebuildDatabase', logger, async () => {
-        await sequelize.query(
-          `DROP SCHEMA IF EXISTS \`${config.mysql.database}\`;`,
-        );
-        await sequelize.query(
-          `CREATE SCHEMA IF NOT EXISTS \`${config.mysql.database}\`;`,
-        );
-        await sequelize.query(`USE \`${config.mysql.database}\`;`);
-        await sequelize.sync({ alter: true });
-      });
-    }
-
-    logger.log('Primary thread (run only once) done');
+    });
   },
 );
