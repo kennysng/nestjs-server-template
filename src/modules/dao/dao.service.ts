@@ -22,14 +22,14 @@ export type Options = {
   deleteMode?: 'deletedAt' | 'destroy';
 };
 
-export class BaseDtoService<T extends Model, ID = number> extends EventEmitter {
+export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
   protected readonly logger: LoggerService;
   protected readonly defaultInclude: Includeable[];
   protected readonly deleteMode: 'deletedAt' | 'destroy';
 
   constructor(
     protected readonly sequelize: Sequelize,
-    protected readonly model: { new (): T } & typeof Model, // eslint-disable-line prettier/prettier
+    protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
     options?: Options,
   ) {
     super();
