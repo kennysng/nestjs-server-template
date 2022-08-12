@@ -2,6 +2,6 @@
   "watch": [
     "configs/**/*.yaml"
   ],
-  "exec": "pnpm start:dev",
+  "exec": "pnpm ts-node index",
   "restartable": "rs"
 }
