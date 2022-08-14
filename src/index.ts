@@ -7,7 +7,8 @@ import { NotFound, RequestTimeout } from 'http-errors';
 import yaml = require('js-yaml');
 import minimist = require('minimist');
 import { resolve } from 'path';
-import type {
+import {
+  Dependencies,
   IConfig,
   IMapper,
   IMasterConfig,
@@ -20,7 +21,7 @@ import { URL } from 'url';
 import * as _cluster from 'cluster';
 import { cpus } from 'os';
 import pino from 'pino';
-import { Sequelize } from 'sequelize-typescript';
+import * as dependencies_ from './dependencies';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 const logger = pino();
@@ -86,24 +87,18 @@ async function masterMain(config: IMasterConfig) {
 
 async function workerMain(config: IWorkerConfig) {
   const redisConfig = config.redis || {};
-  const dbConfig = config.database;
 
-  const sequelize = new Sequelize({
-    dialect: (dbConfig.dialect as any) || 'mariadb',
-    host: dbConfig.host || 'localhost',
-    port: dbConfig.port || 3306,
-    username: dbConfig.username,
-    password: dbConfig.password,
-    models: await import(resolve(__dirname, 'models', 'index.ts')).then(
-      (m) => m.default,
-    ),
-  });
+  const dependencies = new Dependencies();
+  dependencies.register('Logger', logger);
+  for (const key of Object.keys(dependencies_)) {
+    dependencies.register(key, await dependencies_[key](config));
+  }
 
   await Promise.all(
     config.modules.map((key) =>
       import(resolve(__dirname, 'modules', `${key}.ts`))
         .then(({ process }) =>
-          process(new Queue(key, { redis: redisConfig }), sequelize),
+          process(new Queue(key, { redis: redisConfig }), dependencies),
         )
         .then(() => logger.info(`Queue '${key}' worker is ready`)),
     ),

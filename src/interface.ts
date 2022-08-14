@@ -1,5 +1,23 @@
 import { HttpStatus } from 'http-status';
 
+export class Dependencies {
+  private static instance: Dependencies;
+  private readonly dependencies: Record<string, any> = {};
+
+  constructor() {
+    if (!Dependencies.instance) Dependencies.instance = this;
+    return Dependencies.instance;
+  }
+
+  register<T>(key: string, dependency: T) {
+    this.dependencies[key] = dependency;
+  }
+
+  get<T>(key: string): T {
+    return this.dependencies[key];
+  }
+}
+
 interface IBaseConfig {
   clusters?: boolean | number;
   timeout?: number;
