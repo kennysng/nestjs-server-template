@@ -1,5 +1,3 @@
-import { HttpStatus } from 'http-status';
-
 export class Dependencies {
   private static instance: Dependencies;
   private readonly dependencies: Record<string, any> = {};
@@ -59,7 +57,13 @@ export interface IMapper {
   queue: string;
 }
 
-export interface IResult {
-  code: HttpStatus;
-  result: any;
+export interface IRequest<T = any> {
+  method: string;
+  url: string;
+  params: T;
+}
+
+export interface IResult<T = any> {
+  code: number;
+  result: T;
 }

@@ -112,6 +112,7 @@ function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
       reject(new RequestTimeout());
     }, timeout);
     job.on('succeeded', (result: IResult) => {
+      console.log('test');
       clearTimeout(timer);
       resolve(result);
     });

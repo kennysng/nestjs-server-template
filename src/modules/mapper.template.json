@@ -1,4 +1,6 @@
-{
-  "path": "/*",
-  "queue": "default"
-}
+[
+  {
+    "path": "/*",
+    "queue": "default"
+  }
+]
