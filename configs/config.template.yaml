@@ -1,0 +1,25 @@
+port: 8080
+
+modules:
+  - default
+
+auth:
+  expires_in:
+    access_token: 1h
+    refresh_token: 365d
+  secret:
+    access_token: HzDBJ7vFRUQyh88p2ktan0B6Vihn7dcj
+    refresh_token: 5Sh54MWy4p9661A21Ygz31V9FpS7MTxX
+
+database:
+  host: 192.168.1.75
+  port: 3306
+  username: goen
+  password: password
+  database: goen_dev
+  rebuild: false
+  log: true
+
+redis:
+  host: 192.168.1.75
+  port: 6379

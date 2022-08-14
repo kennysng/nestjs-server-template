@@ -14,11 +14,18 @@ interface IBaseConfig {
 
 export interface IMasterConfig extends IBaseConfig {
   port?: number;
-  queues: Record<string, string>;
 }
 
 export interface IWorkerConfig extends IBaseConfig {
   modules: string[];
+  database: {
+    dialect?: string;
+    host?: string;
+    port?: number;
+    username: string;
+    password: string;
+    database: string;
+  };
 }
 
 export type IConfig = IMasterConfig | IWorkerConfig;
@@ -27,6 +34,11 @@ export enum ServerType {
   MASTER = 'master',
   WORKER = 'worker',
   HYBRID = 'hybrid',
+}
+
+export interface IMapper {
+  path: string;
+  queue: string;
 }
 
 export interface IResult {

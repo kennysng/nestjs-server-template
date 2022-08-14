@@ -4,6 +4,6 @@
     "configs/template.yaml"
   ],
   "ext": "yaml,ts",
-  "exec": "pnpm ts-node index",
+  "exec": "pnpm ts-node src/index",
   "restartable": "rs"
 }

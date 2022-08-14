@@ -7,25 +7,41 @@ import { NotFound, RequestTimeout } from 'http-errors';
 import yaml = require('js-yaml');
 import minimist = require('minimist');
 import { resolve } from 'path';
-import {
+import type {
   IConfig,
+  IMapper,
   IMasterConfig,
   IResult,
   IWorkerConfig,
-  ServerType,
-} from 'interface';
+} from './interface';
+import { ServerType } from './interface';
 import { match } from 'node-match-path';
 import { URL } from 'url';
 import * as _cluster from 'cluster';
 import { cpus } from 'os';
+import pino from 'pino';
+import { Sequelize } from 'sequelize-typescript';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
+const logger = pino();
 
 const argv = minimist(process.argv.slice(2));
+
+const NODE_ENV = (process.env.NODE_ENV =
+  argv.env || argv.E || process.env.NODE_ENV || 'development');
+const template = argv.template || argv.T;
 
 async function masterMain(config: IMasterConfig) {
   const port = config.port || 8080;
   const redisConfig = config.redis || {};
+
+  const mapperPath = resolve(
+    __dirname,
+    'modules',
+    `mapper${template ? '.template' : ''}.json`,
+  );
+  const content = await readFile(mapperPath, 'utf8');
+  const mapper = JSON.parse(content) as IMapper[];
 
   const queues: Record<string, Queue> = {};
 
@@ -34,8 +50,8 @@ async function masterMain(config: IMasterConfig) {
   app.register(compression);
   app.all('*', async (request) => {
     const url = new URL(request.url, `http://localhost:${port}`);
-    for (const [key, value] of Object.entries(config.queues)) {
-      const { matches } = match(value, url.pathname);
+    for (const { path, queue: key } of mapper) {
+      const { matches } = match(path, url.pathname);
       if (matches) {
         let queue = queues[key];
         if (!queue) {
@@ -45,7 +61,9 @@ async function masterMain(config: IMasterConfig) {
             redis: redisConfig,
           });
         }
-        queue.on('ready', () => request.log.info(`Queue '${key}' is ready`));
+        queue.on('ready', () =>
+          request.log.info(`Queue '${key}' connection is ready`),
+        );
         const job = await queue
           .createJob({
             method: request.method,
@@ -67,7 +85,29 @@ async function masterMain(config: IMasterConfig) {
 }
 
 async function workerMain(config: IWorkerConfig) {
-  // TODO
+  const redisConfig = config.redis || {};
+  const dbConfig = config.database;
+
+  const sequelize = new Sequelize({
+    dialect: (dbConfig.dialect as any) || 'mariadb',
+    host: dbConfig.host || 'localhost',
+    port: dbConfig.port || 3306,
+    username: dbConfig.username,
+    password: dbConfig.password,
+    models: await import(resolve(__dirname, 'models', 'index.ts')).then(
+      (m) => m.default,
+    ),
+  });
+
+  await Promise.all(
+    config.modules.map((key) =>
+      import(resolve(__dirname, 'modules', `${key}.ts`))
+        .then(({ process }) =>
+          process(new Queue(key, { redis: redisConfig }), sequelize),
+        )
+        .then(() => logger.info(`Queue '${key}' worker is ready`)),
+    ),
+  );
 }
 
 function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
@@ -85,10 +125,8 @@ function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
 }
 
 async function main() {
-  const NODE_ENV = (process.env.NODE_ENV =
-    argv.env || argv.E || process.env.NODE_ENV || 'development');
   const content = await readFile(
-    resolve('configs', `config.${NODE_ENV}.yaml`),
+    resolve('configs', `config.${template ? 'template' : NODE_ENV}.yaml`),
     'utf8',
   );
   const config = yaml.load(content) as IConfig;
@@ -103,11 +141,11 @@ async function main() {
 
   let serverType: ServerType;
   switch (true) {
-    case 'queues' in config && 'modules' in config: {
+    case 'port' in config && 'modules' in config: {
       serverType = ServerType.HYBRID;
       break;
     }
-    case 'queues' in config: {
+    case 'port' in config: {
       serverType = ServerType.MASTER;
       break;
     }
