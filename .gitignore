@@ -41,7 +41,9 @@ coverage
 
 # local files
 configs/*.yaml
-!configs/template.yaml
+!configs/config.template.yaml
+modules/mapper.json
+modules/queues.json
 .local
 *.env
 

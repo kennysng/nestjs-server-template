@@ -1,9 +1,8 @@
 import { HttpStatus } from 'http-status';
 
-export interface IConfig {
-  port?: number;
+interface IBaseConfig {
+  clusters?: boolean | number;
   timeout?: number;
-  queues: Record<string, string>;
   redis?: {
     secure?: boolean;
     host?: string;
@@ -11,6 +10,23 @@ export interface IConfig {
     username?: string;
     password?: string;
   };
+}
+
+export interface IMasterConfig extends IBaseConfig {
+  port?: number;
+  queues: Record<string, string>;
+}
+
+export interface IWorkerConfig extends IBaseConfig {
+  modules: string[];
+}
+
+export type IConfig = IMasterConfig | IWorkerConfig;
+
+export enum ServerType {
+  MASTER = 'master',
+  WORKER = 'worker',
+  HYBRID = 'hybrid',
 }
 
 export interface IResult {
