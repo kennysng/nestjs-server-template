@@ -1,7 +1,9 @@
 {
-  "watch": [
-    "configs/**/*.yaml"
+  "ignore": [
+    "node_modules",
+    "configs/template.yaml"
   ],
+  "ext": "yaml,ts",
   "exec": "pnpm ts-node index",
   "restartable": "rs"
 }

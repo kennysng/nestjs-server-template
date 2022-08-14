@@ -9,8 +9,7 @@
     "prebuild": "rimraf dist",
     "build": "tsc",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "prestart": "npm run build",
-    "start": "node dist/main",
+    "start": "npm run build && node dist",
     "start:dev": "nodemon",
     "lint": "ts-node tools/sort-imports.ts && eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest"
@@ -23,8 +22,10 @@
     "compression": "^1.7.4",
     "fastify": "^4.4.0",
     "helmet": "^5.1.1",
+    "http-errors": "^2.0.0",
     "http-status": "^1.5.2",
     "js-yaml": "^4.1.0",
+    "node-match-path": "^0.6.3",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
     "sequelize": "^6.21.3",
@@ -32,8 +33,10 @@
     "uuid": "^8.3.2"
   },
   "devDependencies": {
+    "@types/http-errors": "^1.8.2",
     "@types/jest": "27.5.0",
     "@types/js-yaml": "^4.0.5",
+    "@types/minimist": "^1.2.2",
     "@types/node": "^17.0.45",
     "@types/sequelize": "^4.28.14",
     "@types/uuid": "^8.3.4",

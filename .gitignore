@@ -40,7 +40,8 @@ coverage
 *.backup
 
 # local files
-configs/*local*.yaml
+configs/*.yaml
+!configs/template.yaml
 .local
 *.env
 
