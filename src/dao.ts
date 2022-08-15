@@ -1,17 +1,19 @@
-import EventEmitter from 'events';
-import pino, { Logger } from 'pino';
 import type {
   FindOptions,
   Includeable,
   Transaction,
   WhereOptions,
 } from 'sequelize';
+
+import deepmerge from 'deepmerge';
+import EventEmitter from 'events';
+import HttpStatus from 'http-status';
+import pino, { Logger } from 'pino';
 import { Model, Sequelize } from 'sequelize-typescript';
+
 import { MyException } from './exceptions';
 import { Options } from './interface';
 import { inTransaction, logSection } from './utils';
-import HttpStatus from 'http-status';
-import deepmerge from 'deepmerge';
 
 export class BaseDao<T extends Model, ID = number> extends EventEmitter {
   protected readonly logger: Logger;

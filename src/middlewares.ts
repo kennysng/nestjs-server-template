@@ -1,4 +1,5 @@
-import { Unauthorized, InternalServerError } from 'http-errors';
+import { InternalServerError, Unauthorized } from 'http-errors';
+
 import { IMiddlewareArgs } from './interface';
 
 export async function authentication({ request }: IMiddlewareArgs) {

@@ -1,12 +1,20 @@
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
+import { fastifyJwt, FastifyJWTOptions } from '@fastify/jwt';
 import Queue = require('bee-queue');
+import * as _cluster from 'cluster';
 import fastify from 'fastify';
 import { readFile } from 'fs/promises';
-import { NotFound, RequestTimeout, InternalServerError } from 'http-errors';
+import { InternalServerError, NotFound, RequestTimeout } from 'http-errors';
 import yaml = require('js-yaml');
 import minimist = require('minimist');
+import { match } from 'node-match-path';
+import { cpus } from 'os';
 import { resolve } from 'path';
+import pino from 'pino';
+import { URL } from 'url';
+
+import * as dependencies_ from './dependencies';
 import {
   Dependencies,
   IConfig,
@@ -17,14 +25,7 @@ import {
   IWorkerConfig,
 } from './interface';
 import { ServerType } from './interface';
-import { match } from 'node-match-path';
-import { URL } from 'url';
-import * as _cluster from 'cluster';
-import { cpus } from 'os';
-import pino from 'pino';
-import * as dependencies_ from './dependencies';
 import * as middlewares_ from './middlewares';
-import { fastifyJwt, FastifyJWTOptions } from '@fastify/jwt';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 const logger = pino({ name: 'global' });

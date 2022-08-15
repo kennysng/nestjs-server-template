@@ -1,6 +1,7 @@
+import type { Includeable } from 'sequelize';
+
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { Logger } from 'pino';
-import type { Includeable } from 'sequelize';
 
 export class Dependencies {
   private static instance: Dependencies;

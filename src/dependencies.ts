@@ -1,6 +1,7 @@
-import { IWorkerConfig } from './interface';
-import { Sequelize as Sequelize_ } from 'sequelize-typescript';
 import { resolve } from 'path';
+import { Sequelize as Sequelize_ } from 'sequelize-typescript';
+
+import { IWorkerConfig } from './interface';
 
 export async function Sequelize(config: IWorkerConfig) {
   const { database: dbConfig } = config;

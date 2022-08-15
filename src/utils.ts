@@ -1,6 +1,7 @@
 import { Logger } from 'pino';
 import { Transaction } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
+
 import { MyException } from './exceptions';
 
 type Result<T> = {
