@@ -3,7 +3,7 @@ import helmet from '@fastify/helmet';
 import Queue = require('bee-queue');
 import fastify from 'fastify';
 import { readFile } from 'fs/promises';
-import { NotFound, RequestTimeout } from 'http-errors';
+import { NotFound, RequestTimeout, InternalServerError } from 'http-errors';
 import yaml = require('js-yaml');
 import minimist = require('minimist');
 import { resolve } from 'path';
@@ -12,6 +12,7 @@ import {
   IConfig,
   IMapper,
   IMasterConfig,
+  IRequest,
   IResult,
   IWorkerConfig,
 } from './interface';
@@ -22,10 +23,11 @@ import * as _cluster from 'cluster';
 import { cpus } from 'os';
 import pino from 'pino';
 import * as dependencies_ from './dependencies';
-import { v4 } from 'uuid';
+import * as middlewares_ from './middlewares';
+import { fastifyJwt, FastifyJWTOptions } from '@fastify/jwt';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
-const logger = pino();
+const logger = pino({ name: 'global' });
 
 const argv = minimist(process.argv.slice(2));
 
@@ -55,9 +57,43 @@ async function masterMain(config: IMasterConfig) {
   const app = fastify({ logger: true });
   app.register(helmet);
   app.register(compression);
-  app.all('*', async (request) => {
+
+  let jwtOptions: FastifyJWTOptions = { secret: '' };
+  if (
+    config.auth.access_token.private_key &&
+    config.auth.access_token.public_key
+  ) {
+    jwtOptions = {
+      secret: {
+        private: await readFile(
+          resolve(__dirname, config.auth.access_token.private_key),
+        ),
+        public: await readFile(
+          resolve(__dirname, config.auth.access_token.public_key),
+        ),
+      },
+      sign: {
+        iss: config.package,
+        algorithm: 'RS256',
+      },
+    };
+  } else if (
+    config.auth.access_token.private_key ||
+    config.auth.access_token.public_key
+  ) {
+    throw new InternalServerError('Missing Jwt Private Key or Public Key');
+  } else if (!config.auth.access_token.secret) {
+    throw new InternalServerError('Missing Jwt Secret');
+  } else {
+    jwtOptions = {
+      secret: config.auth.access_token.secret,
+    };
+  }
+  app.register(fastifyJwt, jwtOptions);
+
+  app.all('*', async (request, reply) => {
     const url = new URL(request.url, `http://localhost:${port}`);
-    for (const { path, queue: key } of mapper) {
+    for (const { path, before = [], after = [], queue: key } of mapper) {
       const { matches } = match(path, url.pathname);
       if (matches) {
         let queue = queues.master[key];
@@ -71,15 +107,37 @@ async function masterMain(config: IMasterConfig) {
             request.log.info(`Queue '${key}' master is ready`),
           );
         }
-        const job = await queue
-          .createJob({
-            method: request.method,
-            url: request.url,
-            params: request.query,
-          })
-          .setId(v4())
-          .save();
-        return await wait(queue, job, config.timeout || 30 * 1000);
+        let data = {
+          method: request.method,
+          url: request.url,
+          params: request.query,
+        };
+        for (const middleware of before) {
+          data =
+            (await middlewares_[middleware]({
+              config,
+              request,
+              reply,
+              jobData: data,
+            })) || data;
+        }
+        const job = await queue.createJob(data).save();
+        let result = await wait<IRequest>(
+          queue,
+          job,
+          config.timeout || 30 * 1000,
+        );
+        for (const middleware of after) {
+          result =
+            (await middlewares_[middleware]({
+              config,
+              request,
+              reply,
+              jobData: data,
+              result,
+            })) || result;
+        }
+        return result;
       }
     }
     throw new NotFound();
@@ -124,7 +182,7 @@ async function workerMain(config: IWorkerConfig) {
 }
 
 function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
-  return new Promise((resolve, reject) => {
+  return new Promise<IResult>((resolve, reject) => {
     const timer = setTimeout(async () => {
       await queue.removeJob(job.id);
       reject(new RequestTimeout());

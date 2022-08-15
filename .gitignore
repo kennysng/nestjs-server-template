@@ -45,6 +45,8 @@ configs/*.yaml
 src/modules/mapper.json
 .local
 *.env
+keys/*.ppk
+keys/*.pub
 
 # frontend
 frontend

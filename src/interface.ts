@@ -1,3 +1,7 @@
+import { FastifyReply, FastifyRequest } from 'fastify';
+import { Logger } from 'pino';
+import type { Includeable } from 'sequelize';
+
 export class Dependencies {
   private static instance: Dependencies;
   private readonly dependencies: Record<string, any> = {};
@@ -28,8 +32,20 @@ interface IBaseConfig {
   };
 }
 
+interface ITokenOptions {
+  secret?: string;
+  expires_in?: string;
+  private_key?: string;
+  public_key?: string;
+}
+
 export interface IMasterConfig extends IBaseConfig {
   port?: number;
+  package?: string;
+  auth: {
+    access_token: ITokenOptions;
+    refresh_token: ITokenOptions;
+  };
 }
 
 export interface IWorkerConfig extends IBaseConfig {
@@ -54,16 +70,33 @@ export enum ServerType {
 
 export interface IMapper {
   path: string;
+  before?: string[];
+  after?: string[];
   queue: string;
 }
 
-export interface IRequest<T = any> {
+export interface IRequest<T = any, P = any> {
   method: string;
   url: string;
   params: T;
+  payload?: P;
 }
 
 export interface IResult<T = any> {
   code: number;
   result: T;
 }
+
+export interface IMiddlewareArgs {
+  config: IMasterConfig;
+  request: FastifyRequest;
+  reply: FastifyReply;
+  jobData: IRequest;
+  result: IResult;
+}
+
+export type Options = {
+  logger?: Logger;
+  defaultInclude?: Includeable[];
+  deleteMode?: 'deletedAt' | 'destroy';
+};
