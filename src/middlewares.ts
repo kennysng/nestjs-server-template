@@ -1,4 +1,4 @@
-import { Unauthorized } from 'http-errors';
+import { Unauthorized, InternalServerError } from 'http-errors';
 import { IMiddlewareArgs } from './interface';
 
 export async function authentication({ request }: IMiddlewareArgs) {
@@ -6,6 +6,10 @@ export async function authentication({ request }: IMiddlewareArgs) {
 }
 
 export async function sign({ reply, result }: IMiddlewareArgs) {
-  // if (result.result.type === 'refresh')
-  reply.header('Authorization', await reply.jwtSign(result.result));
+  const { type, payload } = result.result;
+  if (!type || !payload) throw new InternalServerError('Invalid Jwt Payload');
+  reply.header(
+    type === 'refresh' ? 'x-refresh-token' : 'Authorization',
+    await reply.jwtSign(payload),
+  );
 }
