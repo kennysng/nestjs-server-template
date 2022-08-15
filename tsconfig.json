@@ -20,6 +20,7 @@
     "noFallthroughCasesInSwitch": false
   },
   "include": [
+    "tools/**/*.ts",
     "src/**/*.json",
     "src/**/*.ts"
   ]
