@@ -22,6 +22,7 @@ import * as _cluster from 'cluster';
 import { cpus } from 'os';
 import pino from 'pino';
 import * as dependencies_ from './dependencies';
+import { v4 } from 'uuid';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 const logger = pino();
@@ -32,7 +33,14 @@ const NODE_ENV = (process.env.NODE_ENV =
   argv.env || argv.E || process.env.NODE_ENV || 'development');
 const template = argv.template || argv.T;
 
+const queues: Record<'master' | 'worker', Record<string, Queue>> = {
+  master: {},
+  worker: {},
+};
+
 async function masterMain(config: IMasterConfig) {
+  logger.info('Server starting ...');
+
   const port = config.port || 8080;
   const redisConfig = config.redis || {};
 
@@ -44,8 +52,6 @@ async function masterMain(config: IMasterConfig) {
   const content = await readFile(mapperPath, 'utf8');
   const mapper = JSON.parse(content) as IMapper[];
 
-  const queues: Record<string, Queue> = {};
-
   const app = fastify({ logger: true });
   app.register(helmet);
   app.register(compression);
@@ -54,23 +60,24 @@ async function masterMain(config: IMasterConfig) {
     for (const { path, queue: key } of mapper) {
       const { matches } = match(path, url.pathname);
       if (matches) {
-        let queue = queues[key];
+        let queue = queues.master[key];
         if (!queue) {
-          queue = queues[key] = new Queue(key, {
-            getEvents: false,
+          queue = queues.master[key] = new Queue(key, {
             isWorker: false,
             redis: redisConfig,
           });
+          logger.info(`Queue '${key}' master connecting ...`);
+          queue.on('ready', () =>
+            request.log.info(`Queue '${key}' master is ready`),
+          );
         }
-        queue.on('ready', () =>
-          request.log.info(`Queue '${key}' connection is ready`),
-        );
         const job = await queue
           .createJob({
             method: request.method,
             url: request.url,
             params: request.query,
           })
+          .setId(v4())
           .save();
         return await wait(queue, job, config.timeout || 30 * 1000);
       }
@@ -79,13 +86,18 @@ async function masterMain(config: IMasterConfig) {
   });
 
   process.on('beforeExit', async () => {
-    await Promise.allSettled(Object.values(queues).map((q) => q.close()));
+    await Promise.allSettled([
+      ...Object.values(queues.master).map((q) => q.close()),
+      ...Object.values(queues.worker).map((q) => q.close()),
+    ]);
   });
 
-  await app.listen({ port });
+  await app.listen({ host: '0.0.0.0', port });
 }
 
 async function workerMain(config: IWorkerConfig) {
+  logger.info('Worker starting ...');
+
   const redisConfig = config.redis || {};
 
   const dependencies = new Dependencies();
@@ -96,11 +108,17 @@ async function workerMain(config: IWorkerConfig) {
 
   await Promise.all(
     config.modules.map((key) =>
-      import(resolve(__dirname, 'modules', `${key}.ts`))
-        .then(({ process }) =>
-          process(new Queue(key, { redis: redisConfig }), dependencies),
-        )
-        .then(() => logger.info(`Queue '${key}' worker is ready`)),
+      import(resolve(__dirname, 'modules', key)).then(({ process }) => {
+        let queue = queues.worker[key];
+        if (!queue) {
+          queue = queues.worker[key] = new Queue(key, {
+            redis: redisConfig,
+          });
+        }
+        logger.info(`Queue '${key}' worker connecting ...`);
+        queue.on('ready', () => logger.info(`Queue '${key}' worker is ready`));
+        return process(queue, dependencies);
+      }),
     ),
   );
 }
@@ -112,7 +130,6 @@ function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
       reject(new RequestTimeout());
     }, timeout);
     job.on('succeeded', (result: IResult) => {
-      console.log('test');
       clearTimeout(timer);
       resolve(result);
     });

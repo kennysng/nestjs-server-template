@@ -10,7 +10,7 @@ export async function Sequelize(config: IWorkerConfig) {
     port: dbConfig.port || 3306,
     username: dbConfig.username,
     password: dbConfig.password,
-    models: await import(resolve(__dirname, 'models', 'index.ts')).then(
+    models: await import(resolve(__dirname, 'models', 'index')).then(
       (m) => m.default,
     ),
   });
