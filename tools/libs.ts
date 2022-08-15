@@ -80,7 +80,7 @@ export function parse(lines: string[]): IImport {
 
   if (
     (asterisk && !allAs) ||
-    (type && allAs) ||
+    (type && allAs && !fallback) ||
     (asterisk && imports.length) ||
     (asterisk && fallback)
   ) {

@@ -26,7 +26,9 @@ async function fix(path: string): Promise<void> {
   const stat = await lstat(path);
   if (stat.isDirectory()) {
     const files = await readdir(path);
-    await Promise.all(files.map((f) => fix(resolve(path, f))));
+    await Promise.all(
+      files.filter((f) => f.endsWith('.ts')).map((f) => fix(resolve(path, f))),
+    );
   } else if (stat.isFile()) {
     const content = await readFile(path, 'utf-8');
     let lines = content.split('\n');
