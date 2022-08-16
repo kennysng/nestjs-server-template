@@ -36,8 +36,6 @@ interface IBaseConfig {
 interface ITokenOptions {
   secret?: string;
   expires_in?: string;
-  private_key?: string;
-  public_key?: string;
 }
 
 export interface IMasterConfig extends IBaseConfig {
@@ -76,16 +74,19 @@ export interface IMapper {
   queue: string;
 }
 
-export interface IRequest<T = any, P = any> {
+export interface IRequest<Q = any, B = any> {
   method: string;
   url: string;
-  params: T;
-  payload?: P;
+  query?: Q;
+  body?: B;
 }
 
 export interface IResult<T = any> {
-  code: number;
-  result: T;
+  statusCode: number;
+  error?: string;
+  message?: string;
+  result?: T;
+  elapsed?: number;
 }
 
 export interface IMiddlewareArgs {

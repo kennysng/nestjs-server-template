@@ -9,6 +9,7 @@ specifiers:
   '@types/jest': 27.5.0
   '@types/js-yaml': ^4.0.5
   '@types/jsonwebtoken': ^8.5.8
+  '@types/lodash.uniq': ^4.5.7
   '@types/minimist': ^1.2.2
   '@types/node': ^17.0.45
   '@types/sequelize': ^4.28.14
@@ -31,6 +32,7 @@ specifiers:
   jest: 28.0.3
   js-yaml: ^4.1.0
   jsonwebtoken: ^8.5.1
+  lodash.uniq: ^4.5.0
   mariadb: ^3.0.1
   minimist: ^1.2.6
   node-match-path: ^0.6.3
@@ -61,6 +63,7 @@ dependencies:
   http-status: 1.5.2
   js-yaml: 4.1.0
   jsonwebtoken: 8.5.1
+  lodash.uniq: 4.5.0
   mariadb: 3.0.1
   node-match-path: 0.6.3
   pino: 8.4.1
@@ -76,6 +79,7 @@ devDependencies:
   '@types/jest': 27.5.0
   '@types/js-yaml': 4.0.5
   '@types/jsonwebtoken': 8.5.8
+  '@types/lodash.uniq': 4.5.7
   '@types/minimist': 1.2.2
   '@types/node': 17.0.45
   '@types/sequelize': 4.28.14
@@ -957,6 +961,12 @@ packages:
     resolution: {integrity: sha512-zm6xBQpFDIDM6o9r6HSgDeIcLy82TKWctCXEPbJJcXb5AKmi5BNNdLXneixK4lplX3PqIVcwLBCGE/kAGnlD4A==}
     dependencies:
       '@types/node': 17.0.45
+    dev: true
+
+  /@types/lodash.uniq/4.5.7:
+    resolution: {integrity: sha512-qg7DeAbdZMi6DGvCxThlJycykLLhETrJrQZ6F2KaZ+o0sNK1qRHz46lgNA+nHHjwrmA2a91DyiZTp3ey3m1rEw==}
+    dependencies:
+      '@types/lodash': 4.14.182
     dev: true
 
   /@types/lodash/4.14.182:
@@ -3224,6 +3234,10 @@ packages:
 
   /lodash.once/4.1.1:
     resolution: {integrity: sha512-Sb487aTOCr9drQVL8pIxOzVhafOjZN9UU54hiN8PU3uAiSV7lx1yYNpbNmex2PK6dSJoNTSJUUswT651yww3Mg==}
+    dev: false
+
+  /lodash.uniq/4.5.0:
+    resolution: {integrity: sha512-xfBaXQd9ryd9dlSDvnvI0lvxfLJlYAZzXomUYzLKtUeOQvOP5piqAWuGtrhWeqaXK9hhoM/iyJc5AV+XfsX3HQ==}
     dev: false
 
   /lodash/4.17.21:

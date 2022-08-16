@@ -1,12 +1,13 @@
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
-import { fastifyJwt, FastifyJWTOptions } from '@fastify/jwt';
+import { fastifyJwt } from '@fastify/jwt';
 import Queue = require('bee-queue');
 import * as _cluster from 'cluster';
-import fastify from 'fastify';
+import fastify, { FastifyBaseLogger } from 'fastify';
 import { readFile } from 'fs/promises';
 import { InternalServerError, NotFound, RequestTimeout } from 'http-errors';
 import yaml = require('js-yaml');
+import uniq = require('lodash.uniq');
 import minimist = require('minimist');
 import { match } from 'node-match-path';
 import { cpus } from 'os';
@@ -41,6 +42,34 @@ const queues: Record<'master' | 'worker', Record<string, Queue>> = {
   worker: {},
 };
 
+function connect(key: string, redisConfig: any, logger: FastifyBaseLogger) {
+  let queue = queues.master[key];
+  if (!queue) {
+    queue = queues.master[key] = new Queue(key, {
+      isWorker: false,
+      redis: redisConfig,
+    });
+    logger.info(`Queue '${key}' master connecting ...`);
+    queue.on('ready', () => logger.info(`Queue '${key}' master is ready`));
+  }
+  return queue;
+}
+
+function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
+  const start = Date.now();
+  return new Promise<IResult>((resolve, reject) => {
+    const timer = setTimeout(async () => {
+      await queue.removeJob(job.id);
+      reject(new RequestTimeout());
+    }, timeout);
+    job.on('succeeded', (result: IResult) => {
+      clearTimeout(timer);
+      resolve({ ...result, elapsed: Date.now() - start });
+    });
+    job.on('failed', (e) => reject(e));
+  });
+}
+
 async function masterMain(config: IMasterConfig) {
   logger.info('Server starting ...');
 
@@ -59,59 +88,52 @@ async function masterMain(config: IMasterConfig) {
   app.register(helmet);
   app.register(compression);
 
-  let jwtOptions: FastifyJWTOptions = { secret: '' };
-  if (
-    config.auth.access_token.private_key &&
-    config.auth.access_token.public_key
-  ) {
-    jwtOptions = {
-      secret: {
-        private: await readFile(
-          resolve(__dirname, config.auth.access_token.private_key),
-        ),
-        public: await readFile(
-          resolve(__dirname, config.auth.access_token.public_key),
-        ),
-      },
-      sign: {
-        iss: config.package,
-        algorithm: 'RS256',
-      },
-    };
-  } else if (
-    config.auth.access_token.private_key ||
-    config.auth.access_token.public_key
-  ) {
-    throw new InternalServerError('Missing Jwt Private Key or Public Key');
-  } else if (!config.auth.access_token.secret) {
-    throw new InternalServerError('Missing Jwt Secret');
-  } else {
-    jwtOptions = {
-      secret: config.auth.access_token.secret,
-    };
+  if (!config.auth.access_token.secret) {
+    throw new InternalServerError('Missing Secret for Access Token');
   }
-  app.register(fastifyJwt, jwtOptions);
 
+  app.register(fastifyJwt, {
+    secret: config.auth.access_token.secret,
+  });
+
+  // health check
+  app.get('/health', async (request) => {
+    const keys = uniq(mapper.map((m) => m.queue));
+    return {
+      statusCode: 200,
+      message: 'OK',
+      result: await Promise.all(
+        keys.map<Promise<IResult>>(async (key) => {
+          try {
+            const queue = connect(key, redisConfig, request.log);
+            const data: IRequest = { method: 'HEALTH', url: request.url };
+            const job = await queue.createJob(data).save();
+            const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
+            return { ...result, result: { queue: key } };
+          } catch (e) {
+            return {
+              statusCode: e.statusCode || 500,
+              message: e.message,
+              result: { queue: key },
+            };
+          }
+        }),
+      ),
+    };
+  });
+
+  // RESTful api call
   app.all('*', async (request, reply) => {
     const url = new URL(request.url, `http://localhost:${port}`);
     for (const { path, before = [], after = [], queue: key } of mapper) {
       const { matches } = match(path, url.pathname);
       if (matches) {
-        let queue = queues.master[key];
-        if (!queue) {
-          queue = queues.master[key] = new Queue(key, {
-            isWorker: false,
-            redis: redisConfig,
-          });
-          logger.info(`Queue '${key}' master connecting ...`);
-          queue.on('ready', () =>
-            request.log.info(`Queue '${key}' master is ready`),
-          );
-        }
+        const queue = connect(key, redisConfig, request.log);
         let data = {
           method: request.method,
           url: request.url,
-          params: request.query,
+          query: request.query,
+          body: request.body,
         };
         for (const middleware of before) {
           data =
@@ -180,20 +202,6 @@ async function workerMain(config: IWorkerConfig) {
       }),
     ),
   );
-}
-
-function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
-  return new Promise<IResult>((resolve, reject) => {
-    const timer = setTimeout(async () => {
-      await queue.removeJob(job.id);
-      reject(new RequestTimeout());
-    }, timeout);
-    job.on('succeeded', (result: IResult) => {
-      clearTimeout(timer);
-      resolve(result);
-    });
-    job.on('failed', (e) => reject(e));
-  });
 }
 
 async function main() {
