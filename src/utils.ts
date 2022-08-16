@@ -2,8 +2,6 @@ import { Logger } from 'pino';
 import { Transaction } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 
-import { MyException } from './exceptions';
-
 type Result<T> = {
   result?: T;
   error?: any;
@@ -31,7 +29,7 @@ export async function logSection<T>(
   logger.debug(`${func} start`);
   const { result, error, start, end } = await logElapsed(callback);
   if (error) {
-    MyException.throw(func, error);
+    throw error;
   } else {
     logger.debug(`${func} end: ${end - start}ms`);
     return result;
@@ -53,7 +51,7 @@ export async function inTransaction<T>(
       await transaction.rollback();
       rollback = true;
     }
-    MyException.throw('inTransaction', e);
+    throw e;
   } finally {
     if (!withTransaction && !rollback) await transaction.commit();
   }

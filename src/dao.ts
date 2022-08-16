@@ -7,11 +7,10 @@ import type {
 
 import deepmerge from 'deepmerge';
 import EventEmitter from 'events';
-import HttpStatus from 'http-status';
+import { NotFound } from 'http-errors';
 import pino, { Logger } from 'pino';
 import { Model, Sequelize } from 'sequelize-typescript';
 
-import { MyException } from './exceptions';
 import { Options } from './interface';
 import { inTransaction, logSection } from './utils';
 
@@ -222,17 +221,11 @@ export class BaseDao<T extends Model, ID = number> extends EventEmitter {
       // find
       if (isSingle) {
         if (options) {
-          try {
-            return this.findById(
-              this.getPrimaryKey(result[0]) as ID,
-              transaction,
-              options,
-            );
-          } catch (e) {
-            MyException.throw(`${this.constructor.name}.create`, e, {
-              statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-            });
-          }
+          return this.findById(
+            this.getPrimaryKey(result[0]) as ID,
+            transaction,
+            options,
+          );
         } else {
           return result[0];
         }
@@ -342,12 +335,7 @@ export class BaseDao<T extends Model, ID = number> extends EventEmitter {
       options.include = this.defaultInclude;
       options.transaction = options.transaction || transaction;
       const result = (await model_.findOne(options)) as T;
-      if (!result) {
-        MyException.throw(
-          `${this.constructor.name}.findById`,
-          MyException.e.ENTITY_NOT_FOUND,
-        );
-      }
+      if (!result) throw new NotFound('Entitiy Not Found');
       await this.emit('afterFind', [result]);
       return result;
     }
@@ -519,14 +507,7 @@ export class BaseDao<T extends Model, ID = number> extends EventEmitter {
         this.deleteById(id, transaction),
       );
     } else {
-      let target: T;
-      try {
-        target = await this.findById(id, transaction);
-      } catch (e) {
-        MyException.throw(`${this.constructor.name}.deleteById`, e, {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        });
-      }
+      const target = await this.findById(id, transaction);
       target['deletedAt'] = new Date();
 
       await this.emit('beforeDestroy', [target]);
