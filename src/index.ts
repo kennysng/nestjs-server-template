@@ -12,7 +12,6 @@ import minimist = require('minimist');
 import { match } from 'node-match-path';
 import { cpus } from 'os';
 import { resolve } from 'path';
-import pino from 'pino';
 import { Sequelize } from 'sequelize-typescript';
 import { URL } from 'url';
 
@@ -26,11 +25,11 @@ import {
   IWorkerConfig,
 } from './interface';
 import { ServerType } from './interface';
+import logger from './logger';
 import * as middlewares_ from './middlewares';
 import { logSection } from './utils';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
-const logger = pino({ name: 'global' });
 
 const argv = minimist(process.argv.slice(2));
 
@@ -38,20 +37,25 @@ const NODE_ENV = (process.env.NODE_ENV =
   argv.env || argv.E || process.env.NODE_ENV || 'development');
 const template = argv.template || argv.T;
 
-const queues: Record<'master' | 'worker', Record<string, Queue>> = {
-  master: {},
+const queues: Record<'server' | 'worker', Record<string, Queue>> = {
+  server: {},
   worker: {},
 };
 
-function connect(key: string, redisConfig: any, logger: FastifyBaseLogger) {
-  let queue = queues.master[key];
+function connect(
+  type: 'server' | 'worker',
+  key: string,
+  redisConfig: any,
+  logger: FastifyBaseLogger,
+) {
+  let queue = queues[type][key];
   if (!queue) {
-    queue = queues.master[key] = new Queue(key, {
-      isWorker: false,
+    queue = queues[type][key] = new Queue(key, {
+      isWorker: type === 'worker',
       redis: redisConfig,
     });
-    logger.info(`Queue '${key}' master connecting ...`);
-    queue.on('ready', () => logger.info(`Queue '${key}' master is ready`));
+    logger.info(`Queue '${key}' connecting ...`);
+    queue.on('ready', () => logger.info(`Queue '${key}' is ready`));
   }
   return queue;
 }
@@ -72,7 +76,7 @@ function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
 }
 
 async function masterMain(config: IMasterConfig) {
-  await logSection('Initialize Server', logger, async () => {
+  await logSection('Initialize Server', logger('Server'), async () => {
     const port = config.port || 8080;
     const redisConfig = config.redis || {};
 
@@ -105,7 +109,7 @@ async function masterMain(config: IMasterConfig) {
         result: await Promise.all(
           keys.map<Promise<IResult>>(async (key) => {
             try {
-              const queue = connect(key, redisConfig, request.log);
+              const queue = connect('server', key, redisConfig, request.log);
               const data: IRequest = { method: 'HEALTH', url: request.url };
               const job = await queue.createJob(data).save();
               const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
@@ -128,7 +132,7 @@ async function masterMain(config: IMasterConfig) {
       for (const { path, before = [], after = [], queue: key } of mapper) {
         const { matches } = match(path, url.pathname);
         if (matches) {
-          const queue = connect(key, redisConfig, request.log);
+          const queue = connect('server', key, redisConfig, request.log);
           let data = {
             method: request.method,
             url: request.url,
@@ -168,7 +172,7 @@ async function masterMain(config: IMasterConfig) {
 
     process.on('beforeExit', async () => {
       await Promise.allSettled([
-        ...Object.values(queues.master).map((q) => q.close()),
+        ...Object.values(queues.server).map((q) => q.close()),
         ...Object.values(queues.worker).map((q) => q.close()),
       ]);
     });
@@ -178,14 +182,15 @@ async function masterMain(config: IMasterConfig) {
 }
 
 async function workerMain(config: IWorkerConfig) {
-  await logSection('Initialize Worker', logger, async () => {
+  const myLogger = logger('Worker');
+  await logSection('Initialize Worker', myLogger, async () => {
     const redisConfig = config.redis || {};
 
     const dependencies = new Dependencies();
-    dependencies.register('Logger', logger);
+    dependencies.register('Logger', myLogger);
 
     if (config.database) {
-      const sequelizeLogger = pino({ name: 'Sequelize' });
+      const sequelizeLogger = logger('Sequelize');
       const {
         dialect = 'mariadb',
         host = 'localhost',
@@ -204,7 +209,7 @@ async function workerMain(config: IWorkerConfig) {
         models: await import(resolve(__dirname, 'models', 'index')).then(
           (m) => m.default,
         ),
-        logging: (sql, timing) => logger.info({ sql, timing }),
+        logging: (sql, timing) => sequelizeLogger.info({ sql, elapsed: timing }),
       });
       if (sync) {
         await logSection('Rebuild Database', sequelizeLogger, async () => {
@@ -228,17 +233,8 @@ async function workerMain(config: IWorkerConfig) {
 
     await Promise.all(
       config.modules.map((key) =>
-        import(resolve(__dirname, 'modules', key)).then(({ process }) => {
-          let queue = queues.worker[key];
-          if (!queue) {
-            queue = queues.worker[key] = new Queue(key, {
-              redis: redisConfig,
-            });
-          }
-          logger.info(`Queue '${key}' worker connecting ...`);
-          queue.on('ready', () =>
-            logger.info(`Queue '${key}' worker is ready`),
-          );
+        import(resolve(__dirname, 'modules', key)).then(async ({ process }) => {
+          const queue = await connect('worker', key, redisConfig, myLogger);
           return process(queue, dependencies);
         }),
       ),

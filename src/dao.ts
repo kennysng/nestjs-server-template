@@ -8,11 +8,12 @@ import type {
 import deepmerge from 'deepmerge';
 import EventEmitter from 'events';
 import { NotFound } from 'http-errors';
-import pino, { Logger } from 'pino';
+import { Logger } from 'pino';
 import { Model, Sequelize } from 'sequelize-typescript';
 
 import { Options } from './interface';
 import { inTransaction, logSection } from './utils';
+import logger from './logger';
 
 export class BaseDao<T extends Model, ID = number> extends EventEmitter {
   protected readonly logger: Logger;
@@ -26,23 +27,23 @@ export class BaseDao<T extends Model, ID = number> extends EventEmitter {
   ) {
     super();
 
-    this.logger = options?.logger || pino({ name: this.constructor.name });
+    this.logger = options?.logger || logger(this.constructor.name);
     this.defaultInclude = options?.defaultInclude || [];
     this.deleteMode = options?.deleteMode || 'deletedAt';
 
     this.on('beforeCreate', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`.create ${this.toString(i)}`);
+        this.logger.debug({ entity: this.toJSON(i) }, 'create');
       }
     });
     this.on('beforeUpdate', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`.update ${this.toString(i)}`);
+        this.logger.debug({ entity: this.toJSON(i) }, 'update');
       }
     });
     this.on('beforeDestroy', (instances) => {
       for (const i of instances) {
-        this.logger.debug(`.destroy ${this.toString(i)}`);
+        this.logger.debug({ entity: this.toJSON(i) }, 'destroy');
       }
     });
   }
