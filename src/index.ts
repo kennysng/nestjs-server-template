@@ -183,9 +183,11 @@ async function workerMain(config: IWorkerConfig) {
 
   const dependencies = new Dependencies();
   dependencies.register('Logger', logger);
-  for (const key of Object.keys(dependencies_)) {
-    dependencies.register(key, await dependencies_[key](config));
-  }
+  await Promise.all(
+    Object.keys(dependencies_).map(async (key) => {
+      dependencies.register(key, await dependencies_[key](config));
+    }),
+  );
 
   await Promise.all(
     config.modules.map((key) =>

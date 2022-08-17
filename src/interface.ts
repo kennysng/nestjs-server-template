@@ -56,6 +56,7 @@ export interface IWorkerConfig extends IBaseConfig {
     username: string;
     password: string;
     database: string;
+    sync?: boolean;
   };
 }
 
