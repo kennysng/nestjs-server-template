@@ -64,7 +64,7 @@ function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
   const start = Date.now();
   return new Promise<IResult>((resolve, reject) => {
     const timer = setTimeout(async () => {
-      await queue.removeJob(job.id);
+      queue.removeJob(job.id);
       reject(new RequestTimeout());
     }, timeout);
     job.on('succeeded', (result: IResult) => {
@@ -75,8 +75,8 @@ function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
   });
 }
 
-async function masterMain(config: IMasterConfig) {
-  await logSection('Initialize Server', logger('Server'), async () => {
+function masterMain(config: IMasterConfig) {
+  logSection('Initialize Server', logger('Server'), async () => {
     const port = config.port || 8080;
     const redisConfig = config.redis || {};
 
@@ -170,8 +170,8 @@ async function masterMain(config: IMasterConfig) {
       throw new NotFound();
     });
 
-    process.on('beforeExit', async () => {
-      await Promise.allSettled([
+    process.on('beforeExit', () => {
+      Promise.allSettled([
         ...Object.values(queues.server).map((q) => q.close()),
         ...Object.values(queues.worker).map((q) => q.close()),
       ]);
@@ -181,9 +181,9 @@ async function masterMain(config: IMasterConfig) {
   });
 }
 
-async function workerMain(config: IWorkerConfig) {
+function workerMain(config: IWorkerConfig) {
   const myLogger = logger('Worker');
-  await logSection('Initialize Worker', myLogger, async () => {
+  logSection('Initialize Worker', myLogger, async () => {
     const redisConfig = config.redis || {};
 
     const dependencies = new Dependencies();
@@ -209,10 +209,11 @@ async function workerMain(config: IWorkerConfig) {
         models: await import(resolve(__dirname, 'models', 'index')).then(
           (m) => m.default,
         ),
-        logging: (sql, timing) => sequelizeLogger.info({ sql, elapsed: timing }),
+        logging: (sql, timing) =>
+          sequelizeLogger.info({ sql, elapsed: timing }),
       });
       if (sync) {
-        await logSection('Rebuild Database', sequelizeLogger, async () => {
+        logSection('Rebuild Database', sequelizeLogger, async () => {
           await sequelize.query(`
             DROP SCHEMA IF EXISTS \`${database}\`;
             CREATE SCHEMA IF NOT EXISTS \`${database}\`;
@@ -224,14 +225,14 @@ async function workerMain(config: IWorkerConfig) {
       dependencies.register('Sequelize', sequelize);
     }
 
-    const dependencies_ = (await require('./dependencies')) || {};
+    const dependencies_ = require('./dependencies') || {};
     await Promise.all(
       Object.keys(dependencies_).map(async (key) => {
         dependencies.register(key, await dependencies_[key](config));
       }),
     );
 
-    await Promise.all(
+    Promise.all(
       config.modules.map((key) =>
         import(resolve(__dirname, 'modules', key)).then(async ({ process }) => {
           const queue = await connect('worker', key, redisConfig, myLogger);
