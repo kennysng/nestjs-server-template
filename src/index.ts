@@ -72,7 +72,7 @@ function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
 }
 
 async function masterMain(config: IMasterConfig) {
-  logSection('Initialize Server', logger, async () => {
+  await logSection('Initialize Server', logger, async () => {
     const port = config.port || 8080;
     const redisConfig = config.redis || {};
 
@@ -178,7 +178,7 @@ async function masterMain(config: IMasterConfig) {
 }
 
 async function workerMain(config: IWorkerConfig) {
-  logSection('Initialize Worker', logger, async () => {
+  await logSection('Initialize Worker', logger, async () => {
     const redisConfig = config.redis || {};
 
     const dependencies = new Dependencies();
