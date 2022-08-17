@@ -49,7 +49,7 @@ export interface IMasterConfig extends IBaseConfig {
 
 export interface IWorkerConfig extends IBaseConfig {
   modules: string[];
-  database: {
+  database?: {
     dialect?: string;
     host?: string;
     port?: number;

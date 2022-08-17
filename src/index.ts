@@ -13,9 +13,9 @@ import { match } from 'node-match-path';
 import { cpus } from 'os';
 import { resolve } from 'path';
 import pino from 'pino';
+import { Sequelize } from 'sequelize-typescript';
 import { URL } from 'url';
 
-import * as dependencies_ from './dependencies';
 import {
   Dependencies,
   IConfig,
@@ -27,6 +27,7 @@ import {
 } from './interface';
 import { ServerType } from './interface';
 import * as middlewares_ from './middlewares';
+import { logSection } from './utils';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 const logger = pino({ name: 'global' });
@@ -71,139 +72,178 @@ function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
 }
 
 async function masterMain(config: IMasterConfig) {
-  logger.info('Server starting ...');
+  logSection('Initialize Server', logger, async () => {
+    const port = config.port || 8080;
+    const redisConfig = config.redis || {};
 
-  const port = config.port || 8080;
-  const redisConfig = config.redis || {};
+    const mapperPath = resolve(
+      __dirname,
+      'modules',
+      `mapper${template ? '.template' : ''}.json`,
+    );
+    const content = await readFile(mapperPath, 'utf8');
+    const mapper = JSON.parse(content) as IMapper[];
 
-  const mapperPath = resolve(
-    __dirname,
-    'modules',
-    `mapper${template ? '.template' : ''}.json`,
-  );
-  const content = await readFile(mapperPath, 'utf8');
-  const mapper = JSON.parse(content) as IMapper[];
+    const app = fastify({ logger: true });
+    app.register(helmet);
+    app.register(compression);
 
-  const app = fastify({ logger: true });
-  app.register(helmet);
-  app.register(compression);
-
-  if (!config.auth.access_token.secret) {
-    throw new InternalServerError('Missing Secret for Access Token');
-  }
-
-  app.register(fastifyJwt, {
-    secret: config.auth.access_token.secret,
-  });
-
-  // health check
-  app.get('/health', async (request) => {
-    const keys = uniq(mapper.map((m) => m.queue));
-    return {
-      statusCode: 200,
-      message: 'OK',
-      result: await Promise.all(
-        keys.map<Promise<IResult>>(async (key) => {
-          try {
-            const queue = connect(key, redisConfig, request.log);
-            const data: IRequest = { method: 'HEALTH', url: request.url };
-            const job = await queue.createJob(data).save();
-            const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
-            return { ...result, result: { queue: key } };
-          } catch (e) {
-            return {
-              statusCode: e.statusCode || 500,
-              message: e.message,
-              result: { queue: key },
-            };
-          }
-        }),
-      ),
-    };
-  });
-
-  // RESTful api call
-  app.all('*', async (request, reply) => {
-    const url = new URL(request.url, `http://localhost:${port}`);
-    for (const { path, before = [], after = [], queue: key } of mapper) {
-      const { matches } = match(path, url.pathname);
-      if (matches) {
-        const queue = connect(key, redisConfig, request.log);
-        let data = {
-          method: request.method,
-          url: request.url,
-          query: request.query,
-          body: request.body,
-        };
-        for (const middleware of before) {
-          data =
-            (await middlewares_[middleware]({
-              config,
-              request,
-              reply,
-              jobData: data,
-            })) || data;
-        }
-        const job = await queue.createJob(data).save();
-        let result = await wait<IRequest>(
-          queue,
-          job,
-          config.timeout || 30 * 1000,
-        );
-        for (const middleware of after) {
-          result =
-            (await middlewares_[middleware]({
-              config,
-              request,
-              reply,
-              jobData: data,
-              result,
-            })) || result;
-        }
-        return result;
-      }
+    if (!config.auth.access_token.secret) {
+      throw new InternalServerError('Missing Secret for Access Token');
     }
-    throw new NotFound();
-  });
 
-  process.on('beforeExit', async () => {
-    await Promise.allSettled([
-      ...Object.values(queues.master).map((q) => q.close()),
-      ...Object.values(queues.worker).map((q) => q.close()),
-    ]);
-  });
+    app.register(fastifyJwt, {
+      secret: config.auth.access_token.secret,
+    });
 
-  await app.listen({ host: '0.0.0.0', port });
+    // health check
+    app.get('/health', async (request) => {
+      const keys = uniq(mapper.map((m) => m.queue));
+      return {
+        statusCode: 200,
+        message: 'OK',
+        result: await Promise.all(
+          keys.map<Promise<IResult>>(async (key) => {
+            try {
+              const queue = connect(key, redisConfig, request.log);
+              const data: IRequest = { method: 'HEALTH', url: request.url };
+              const job = await queue.createJob(data).save();
+              const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
+              return { ...result, result: { queue: key } };
+            } catch (e) {
+              return {
+                statusCode: e.statusCode || 500,
+                message: e.message,
+                result: { queue: key },
+              };
+            }
+          }),
+        ),
+      };
+    });
+
+    // RESTful api call
+    app.all('*', async (request, reply) => {
+      const url = new URL(request.url, `http://localhost:${port}`);
+      for (const { path, before = [], after = [], queue: key } of mapper) {
+        const { matches } = match(path, url.pathname);
+        if (matches) {
+          const queue = connect(key, redisConfig, request.log);
+          let data = {
+            method: request.method,
+            url: request.url,
+            query: request.query,
+            body: request.body,
+          };
+          for (const middleware of before) {
+            data =
+              (await middlewares_[middleware]({
+                config,
+                request,
+                reply,
+                jobData: data,
+              })) || data;
+          }
+          const job = await queue.createJob(data).save();
+          let result = await wait<IRequest>(
+            queue,
+            job,
+            config.timeout || 30 * 1000,
+          );
+          for (const middleware of after) {
+            result =
+              (await middlewares_[middleware]({
+                config,
+                request,
+                reply,
+                jobData: data,
+                result,
+              })) || result;
+          }
+          return result;
+        }
+      }
+      throw new NotFound();
+    });
+
+    process.on('beforeExit', async () => {
+      await Promise.allSettled([
+        ...Object.values(queues.master).map((q) => q.close()),
+        ...Object.values(queues.worker).map((q) => q.close()),
+      ]);
+    });
+
+    await app.listen({ host: '0.0.0.0', port });
+  });
 }
 
 async function workerMain(config: IWorkerConfig) {
-  logger.info('Worker starting ...');
+  logSection('Initialize Worker', logger, async () => {
+    const redisConfig = config.redis || {};
 
-  const redisConfig = config.redis || {};
+    const dependencies = new Dependencies();
+    dependencies.register('Logger', logger);
 
-  const dependencies = new Dependencies();
-  dependencies.register('Logger', logger);
-  await Promise.all(
-    Object.keys(dependencies_).map(async (key) => {
-      dependencies.register(key, await dependencies_[key](config));
-    }),
-  );
+    if (config.database) {
+      const sequelizeLogger = pino({ name: 'Sequelize' });
+      const {
+        dialect = 'mariadb',
+        host = 'localhost',
+        port = 3306,
+        username,
+        password,
+        database,
+        sync,
+      } = config.database;
+      const sequelize = new Sequelize({
+        dialect: dialect as any,
+        host,
+        port,
+        username,
+        password,
+        models: await import(resolve(__dirname, 'models', 'index')).then(
+          (m) => m.default,
+        ),
+        logging: (sql, timing) => logger.info({ sql, timing }),
+      });
+      if (sync) {
+        await logSection('Rebuild Database', sequelizeLogger, async () => {
+          await sequelize.query(`
+            DROP SCHEMA IF EXISTS \`${database}\`;
+            CREATE SCHEMA IF NOT EXISTS \`${database}\`;
+            USE \`${database}\`;
+          `);
+          await sequelize.sync({ alter: true });
+        });
+      }
+      dependencies.register('Sequelize', sequelize);
+    }
 
-  await Promise.all(
-    config.modules.map((key) =>
-      import(resolve(__dirname, 'modules', key)).then(({ process }) => {
-        let queue = queues.worker[key];
-        if (!queue) {
-          queue = queues.worker[key] = new Queue(key, {
-            redis: redisConfig,
-          });
-        }
-        logger.info(`Queue '${key}' worker connecting ...`);
-        queue.on('ready', () => logger.info(`Queue '${key}' worker is ready`));
-        return process(queue, dependencies);
+    const dependencies_ = (await require('./dependencies')) || {};
+    await Promise.all(
+      Object.keys(dependencies_).map(async (key) => {
+        dependencies.register(key, await dependencies_[key](config));
       }),
-    ),
-  );
+    );
+
+    await Promise.all(
+      config.modules.map((key) =>
+        import(resolve(__dirname, 'modules', key)).then(({ process }) => {
+          let queue = queues.worker[key];
+          if (!queue) {
+            queue = queues.worker[key] = new Queue(key, {
+              redis: redisConfig,
+            });
+          }
+          logger.info(`Queue '${key}' worker connecting ...`);
+          queue.on('ready', () =>
+            logger.info(`Queue '${key}' worker is ready`),
+          );
+          return process(queue, dependencies);
+        }),
+      ),
+    );
+  });
 }
 
 async function main() {
