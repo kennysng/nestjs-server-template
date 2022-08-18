@@ -1,7 +1,7 @@
+import type { DoneCallback } from 'bee-queue';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { Logger } from 'pino';
 import type { Includeable } from 'sequelize';
-
-import { FastifyReply, FastifyRequest } from 'fastify';
-import { Logger } from 'pino';
 
 export class Dependencies {
   private static instance: Dependencies;
@@ -88,6 +88,15 @@ export interface IResult<T = any> {
   message?: string;
   result?: T;
   elapsed?: number;
+}
+
+export interface IWorker {
+  health(done: DoneCallback<IResult>, dependencies: Dependencies);
+  process(
+    data: IRequest,
+    done: DoneCallback<IResult>,
+    dependencies: Dependencies,
+  );
 }
 
 export interface IMiddlewareArgs {

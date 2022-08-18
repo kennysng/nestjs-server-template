@@ -1,11 +1,15 @@
+import type { DoneCallback, Job } from 'bee-queue';
+import type { FastifyBaseLogger } from 'fastify';
+
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
 import { fastifyJwt } from '@fastify/jwt';
 import Queue = require('bee-queue');
 import * as _cluster from 'cluster';
-import fastify, { FastifyBaseLogger } from 'fastify';
+import fastify from 'fastify';
 import { readFile } from 'fs/promises';
 import { InternalServerError, NotFound, RequestTimeout } from 'http-errors';
+import httpStatus = require('http-status');
 import yaml = require('js-yaml');
 import uniq = require('lodash.uniq');
 import minimist = require('minimist');
@@ -22,6 +26,7 @@ import {
   IMasterConfig,
   IRequest,
   IResult,
+  IWorker,
   IWorkerConfig,
 } from './interface';
 import { ServerType } from './interface';
@@ -60,7 +65,7 @@ function connect(
   return queue;
 }
 
-function wait<T>(queue: Queue, job: Queue.Job<T>, timeout: number) {
+function wait<T>(queue: Queue, job: Job<T>, timeout: number) {
   const start = Date.now();
   return new Promise<IResult>((resolve, reject) => {
     const timer = setTimeout(async () => {
@@ -234,10 +239,20 @@ function workerMain(config: IWorkerConfig) {
 
     Promise.all(
       config.modules.map((key) =>
-        import(resolve(__dirname, 'modules', key)).then(async ({ process }) => {
-          const queue = await connect('worker', key, redisConfig, myLogger);
-          return process(queue, dependencies);
-        }),
+        import(resolve(__dirname, 'modules', key)).then(
+          async ({
+            health = () => ({ statusCode: httpStatus.OK }),
+            process,
+          }: IWorker) => {
+            const queue = await connect('worker', key, redisConfig, myLogger);
+            return queue.process(
+              (job: Job<IRequest>, done: DoneCallback<IResult>) =>
+                job.data.method === 'HEALTH'
+                  ? health(done, dependencies)
+                  : process(job.data, done, dependencies),
+            );
+          },
+        ),
       ),
     );
   });
