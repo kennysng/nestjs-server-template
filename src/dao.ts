@@ -1,3 +1,4 @@
+import type { Options } from './interface';
 import type {
   FindOptions,
   Includeable,
@@ -11,9 +12,8 @@ import { NotFound } from 'http-errors';
 import { Logger } from 'pino';
 import { Model, Sequelize } from 'sequelize-typescript';
 
-import { Options } from './interface';
-import { inTransaction, logSection } from './utils';
 import logger from './logger';
+import { inTransaction, logSection } from './utils';
 
 export class BaseDao<T extends Model, ID = number> extends EventEmitter {
   protected readonly logger: Logger;
