@@ -19,6 +19,7 @@ import { resolve } from 'path';
 import { Sequelize } from 'sequelize-typescript';
 import { URL } from 'url';
 
+import { DaoHelper } from './dao';
 import {
   Dependencies,
   IConfig,
@@ -26,6 +27,7 @@ import {
   IMasterConfig,
   IRequest,
   IResult,
+  IUser,
   IWorker,
   IWorkerConfig,
 } from './interface';
@@ -143,6 +145,7 @@ function masterMain(config: IMasterConfig) {
             url: request.url,
             query: request.query,
             body: request.body,
+            user: request.user as IUser,
           };
           for (const middleware of before) {
             data =
@@ -172,7 +175,7 @@ function masterMain(config: IMasterConfig) {
           return result;
         }
       }
-      throw new NotFound();
+      throw new NotFound('Page Not Found');
     });
 
     process.on('beforeExit', () => {
@@ -192,7 +195,7 @@ function workerMain(config: IWorkerConfig) {
     const redisConfig = config.redis || {};
 
     const dependencies = new Dependencies();
-    dependencies.register('Logger', myLogger);
+    dependencies.register(myLogger);
 
     if (config.database) {
       const sequelizeLogger = logger('Sequelize');
@@ -227,13 +230,14 @@ function workerMain(config: IWorkerConfig) {
           await sequelize.sync({ alter: true });
         });
       }
-      dependencies.register('Sequelize', sequelize);
+      dependencies.register(sequelize);
+      dependencies.register(new DaoHelper(sequelize));
     }
 
     const dependencies_ = require('./dependencies') || {};
     await Promise.all(
       Object.keys(dependencies_).map(async (key) => {
-        dependencies.register(key, await dependencies_[key](config));
+        dependencies.register(await dependencies_[key](config));
       }),
     );
 
@@ -246,10 +250,17 @@ function workerMain(config: IWorkerConfig) {
           }: IWorker) => {
             const queue = await connect('worker', key, redisConfig, myLogger);
             return queue.process(
-              (job: Job<IRequest>, done: DoneCallback<IResult>) =>
-                job.data.method === 'HEALTH'
-                  ? health(done, dependencies)
-                  : process(job.data, done, dependencies),
+              async (job: Job<IRequest>, done: DoneCallback<IResult>) => {
+                try {
+                  const result =
+                    job.data.method === 'HEALTH'
+                      ? await health(dependencies)
+                      : await process(job.data, dependencies);
+                  return done(null, result);
+                } catch (e) {
+                  return done(e);
+                }
+              },
             );
           },
         ),

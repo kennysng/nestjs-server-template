@@ -1,7 +1,8 @@
-import type { DoneCallback } from 'bee-queue';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Logger } from 'pino';
 import type { Includeable } from 'sequelize';
+
+import { InternalServerError } from 'http-errors';
 
 export class Dependencies {
   private static instance: Dependencies;
@@ -12,12 +13,15 @@ export class Dependencies {
     return Dependencies.instance;
   }
 
-  register<T>(key: string, dependency: T) {
-    this.dependencies[key] = dependency;
+  register<T>(dependency: T) {
+    this.dependencies[dependency.constructor.name] = dependency;
   }
 
-  get<T>(key: string): T {
-    return this.dependencies[key];
+  get<T>(dependency: new (...args: any[]) => T): T {
+    const key = dependency.constructor.name;
+    const result = this.dependencies[key];
+    if (!result) throw new InternalServerError(`Dependency ${key} Not Found`);
+    return result;
   }
 }
 
@@ -75,11 +79,17 @@ export interface IMapper {
   queue: string;
 }
 
+export interface IUser {
+  id: number;
+  // TODO
+}
+
 export interface IRequest<Q = any, B = any> {
   method: string;
   url: string;
   query?: Q;
   body?: B;
+  user?: IUser;
 }
 
 export interface IResult<T = any> {
@@ -91,12 +101,8 @@ export interface IResult<T = any> {
 }
 
 export interface IWorker {
-  health(done: DoneCallback<IResult>, dependencies: Dependencies);
-  process(
-    data: IRequest,
-    done: DoneCallback<IResult>,
-    dependencies: Dependencies,
-  );
+  health(dependencies: Dependencies);
+  process(data: IRequest, dependencies: Dependencies);
 }
 
 export interface IMiddlewareArgs {

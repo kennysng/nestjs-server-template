@@ -1,14 +1,10 @@
-import type Queue = require('bee-queue');
-
 import httpStatus = require('http-status');
 
-import { IRequest, IResult } from '../interface';
-
-export function health(done: Queue.DoneCallback<IResult>) {
+export function health() {
   return { statusCode: httpStatus.OK };
 }
 
-export function process(data: IRequest) {
+export function process() {
   return {
     statusCode: httpStatus.OK,
     result: 'Hello World!',
