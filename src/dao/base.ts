@@ -1,4 +1,4 @@
-import type { IUser, Options } from './interface';
+import type { IUser, Options } from '../interface';
 import type {
   FindOptions,
   Includeable,
@@ -13,8 +13,8 @@ import { InternalServerError, NotFound } from 'http-errors';
 import { Logger } from 'pino';
 import { Model, Sequelize } from 'sequelize-typescript';
 
-import logger from './logger';
-import { inTransaction, logSection } from './utils';
+import logger from '../logger';
+import { inTransaction, logSection } from '../utils';
 
 // eslint-disable-next-line
 type MyModel<T> = { new(): T } & typeof Model;

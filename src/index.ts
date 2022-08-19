@@ -19,7 +19,7 @@ import { resolve } from 'path';
 import { Sequelize } from 'sequelize-typescript';
 import { URL } from 'url';
 
-import { DaoHelper } from './dao';
+import { DaoHelper } from './dao/base';
 import {
   Dependencies,
   IConfig,
@@ -33,7 +33,7 @@ import {
 } from './interface';
 import { ServerType } from './interface';
 import logger from './logger';
-import * as middlewares_ from './middlewares';
+import * as middlewares_ from './middleware';
 import { logSection } from './utils';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
