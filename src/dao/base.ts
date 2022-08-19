@@ -24,11 +24,11 @@ export class DaoHelper {
 
   constructor(private readonly sequelize: Sequelize) {}
 
-  get<T>(model: MyModel<T>) {
+  get<T>(model: MyModel<any>) {
     if (!this.daos[model.constructor.name]) {
       this.daos[model.constructor.name] = new BaseDao(this.sequelize, model);
     }
-    return this.daos[model.constructor.name];
+    return this.daos[model.constructor.name] as unknown as T;
   }
 
   register<T extends Model>(model: MyModel<T>, dao: BaseDao<T>) {

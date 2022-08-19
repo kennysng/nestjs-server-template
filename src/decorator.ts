@@ -1,21 +1,19 @@
 import { IRequest } from './interface';
 import { NotFound } from 'http-errors';
 
-type GetUrl = (data: IRequest<any>) => string;
+import { fixUrl } from './utils';
+
+type CheckUrl = (data: IRequest<any>) => boolean;
 
 const registered: Record<
   string,
-  Record<string, Array<[GetUrl, (data: IRequest<any>) => any]>>
+  Record<string, Array<[CheckUrl, (data: IRequest<any>) => any]>>
 > = {};
 
-function fixUrl(url: string) {
-  if (!url.startsWith('/')) url = '/' + url;
-  while (url.endsWith('/')) url = url.substring(0, url.length - 1);
-  return url;
-}
-
-export function Path(method: string, url: string | GetUrl = () => '') {
-  if (typeof url === 'string') url = () => (url || '') as string;
+export function Path(method: string, url: string | CheckUrl = '') {
+  if (typeof url === 'string') {
+    url = ({ url: url_ }) => url === fixUrl(url_);
+  }
   return function (
     target: any,
     propertyKey: string,
@@ -30,7 +28,7 @@ export function Path(method: string, url: string | GetUrl = () => '') {
     if (!registered[target.constructor.name][method]) {
       registered[target.constructor.name][method] = [];
     }
-    registered[target.constructor.name][method].push([url as GetUrl, func]);
+    registered[target.constructor.name][method].push([url as CheckUrl, func]);
   };
 }
 
@@ -54,14 +52,12 @@ export function Queue<T extends { new(...args: any[]): any }>(baseUrl = '') {
       }
 
       find(data: IRequest) {
-        const target = fixUrl(data.url);
         if (!registered[this.name][data.method]) {
           registered[this.name][data.method] = [];
         }
-        return registered[this.name][data.method].find(([getUrl]) => {
-          const url = fixUrl(getUrl(data));
-          return url === target;
-        });
+        return registered[this.name][data.method].find(([checkUrl]) =>
+          checkUrl(data),
+        );
       }
 
       async run(data: IRequest<any>) {

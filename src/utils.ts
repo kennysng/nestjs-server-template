@@ -10,6 +10,12 @@ type Result<T> = {
   end: number;
 };
 
+export function fixUrl(url: string) {
+  if (!url.startsWith('/')) url = '/' + url;
+  while (url.endsWith('/')) url = url.substring(0, url.length - 1);
+  return url;
+}
+
 export async function logElapsed<T>(
   callback: () => T | Promise<T>,
 ): Promise<Result<T>> {
