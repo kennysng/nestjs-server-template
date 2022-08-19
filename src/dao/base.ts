@@ -43,7 +43,7 @@ export class BaseDao<T extends Model, ID = number> extends EventEmitter {
 
   constructor(
     protected readonly sequelize: Sequelize,
-    protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
+    protected readonly model: MyModel<T>,
     options?: Options,
   ) {
     super();
