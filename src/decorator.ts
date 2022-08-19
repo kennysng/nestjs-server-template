@@ -45,18 +45,11 @@ export function Queue<T extends { new(...args: any[]): any }>(baseUrl = '') {
     }
 
     return class extends constructor {
-      readonly name: string;
-
-      constructor(...args: any[]) {
-        super(...args);
-        this.name = super.constructor.name;
-      }
-
       find(data: IRequest) {
-        if (!registered[this.name][data.method]) {
-          registered[this.name][data.method] = [];
+        if (!registered[constructor.name][data.method]) {
+          registered[constructor.name][data.method] = [];
         }
-        return registered[this.name][data.method].find(([checkUrl]) =>
+        return registered[constructor.name][data.method].find(([checkUrl]) =>
           checkUrl(data),
         );
       }
