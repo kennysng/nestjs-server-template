@@ -77,7 +77,9 @@ function wait<T>(queue: Queue, job: Job<T>, timeout: number) {
       clearTimeout(timer);
       resolve({ ...result, elapsed: Date.now() - start });
     });
-    job.on('failed', (e) => reject(new httpErrors[e.message]() || e));
+    job.on('failed', (e) =>
+      reject(httpErrors[e.message] ? new httpErrors[e.message]() : e),
+    );
   });
 }
 
@@ -110,6 +112,7 @@ function masterMain(config: IMasterConfig) {
         message: 'OK',
         result: await Promise.all(
           keys.map<Promise<IResult>>(async (key) => {
+            let job: Job<IRequest>;
             try {
               const queue = connect('server', key, redisConfig, request.log);
               const data: IRequest = {
@@ -118,7 +121,7 @@ function masterMain(config: IMasterConfig) {
                 query: {},
                 params: {},
               };
-              const job = await queue.createJob(data).save();
+              job = await queue.createJob(data).save();
               const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
               return { ...result, result: { queue: key } };
             } catch (e) {
@@ -135,6 +138,7 @@ function masterMain(config: IMasterConfig) {
 
     // RESTful api call
     app.all('*', async (request, reply) => {
+      let job: Job<IRequest>;
       try {
         const url = new URL(request.url, `http://localhost:${port}`);
         for (const { path, before = [], after = [], queue: key } of mapper) {
@@ -158,7 +162,7 @@ function masterMain(config: IMasterConfig) {
                   jobData: data,
                 })) || data;
             }
-            const job = await queue.createJob(data).save();
+            job = await queue.createJob(data).save();
             let result = await wait<IRequest>(
               queue,
               job,
@@ -268,9 +272,10 @@ function workerMain(config: IWorkerConfig) {
                 queueInst
                   .run(job.data)
                   .then((result) => done(null, result))
-                  .catch((e) =>
-                    done(e.statusCode ? new Error(e.statusCode) : e),
-                  );
+                  .catch((e) => {
+                    myLogger.error(e, e.message);
+                    done(e.statusCode ? new Error(e.statusCode) : e);
+                  });
               },
             );
           },
