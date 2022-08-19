@@ -12,7 +12,8 @@ const registered: Record<
 
 export function Path(method: string, url: string | CheckUrl = '') {
   if (typeof url === 'string') {
-    url = ({ url: url_ }) => url === fixUrl(url_);
+    const url_ = url;
+    url = ({ url: url__ }) => fixUrl(url_) === fixUrl(url__);
   }
   return function (
     target: any,
@@ -63,7 +64,7 @@ export function Queue<T extends { new(...args: any[]): any }>(baseUrl = '') {
       async run(data: IRequest<any>) {
         const target = this.find(data) || this.find({ ...data, method: 'ALL' });
         if (!target) throw new NotFound();
-        return await target[1](data);
+        return await target[1].apply(this, [data]);
       }
     };
   };
