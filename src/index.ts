@@ -234,8 +234,11 @@ function workerMain(config: IWorkerConfig) {
       dependencies.register(sequelize);
 
       const daoHelper = new DaoHelper(sequelize);
-      for (const [daoClass, customDao] of daos) {
-        daoHelper.register(daoClass, customDao);
+      for (const [daoClass, customDao, options] of daos) {
+        daoHelper.register(
+          daoClass,
+          new customDao(sequelize, daoClass, options),
+        );
       }
       dependencies.register(daoHelper);
     }
