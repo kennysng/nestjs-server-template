@@ -118,7 +118,12 @@ function masterMain(config: IMasterConfig) {
           keys.map<Promise<IResult>>(async (key) => {
             try {
               const queue = connect('server', key, redisConfig, request.log);
-              const data: IRequest = { method: 'HEALTH', url: request.url };
+              const data: IRequest = {
+                method: 'HEALTH',
+                url: request.url,
+                query: {},
+                params: {},
+              };
               const job = await queue.createJob(data).save();
               const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
               return { ...result, result: { queue: key } };
@@ -145,6 +150,7 @@ function masterMain(config: IMasterConfig) {
             method: request.method,
             url: request.url,
             query: request.query,
+            params: request.params,
             body: request.body,
             user: request.user as IUser,
           };
