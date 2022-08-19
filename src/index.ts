@@ -19,6 +19,7 @@ import { resolve } from 'path';
 import { Sequelize } from 'sequelize-typescript';
 import { URL } from 'url';
 
+import daos from './dao';
 import { DaoHelper } from './dao/base';
 import {
   Dependencies,
@@ -231,7 +232,12 @@ function workerMain(config: IWorkerConfig) {
         });
       }
       dependencies.register(sequelize);
-      dependencies.register(new DaoHelper(sequelize));
+
+      const daoHelper = new DaoHelper(sequelize);
+      for (const [daoClass, customDao] of daos) {
+        daoHelper.register(daoClass, customDao);
+      }
+      dependencies.register(daoHelper);
     }
 
     const dependencies_ = require('./dependencies') || {};

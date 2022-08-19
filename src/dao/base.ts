@@ -17,7 +17,7 @@ import logger from '../logger';
 import { inTransaction, logSection } from '../utils';
 
 // eslint-disable-next-line
-type MyModel<T> = { new(): T } & typeof Model;
+export type MyModel<T> = { new(): T } & typeof Model;
 
 export class DaoHelper {
   private readonly daos: Record<string, BaseDao<any>> = {};
@@ -29,6 +29,10 @@ export class DaoHelper {
       this.daos[model.constructor.name] = new BaseDao(this.sequelize, model);
     }
     return this.daos[model.constructor.name];
+  }
+
+  register<T extends Model>(model: MyModel<T>, dao: BaseDao<T>) {
+    this.daos[model.constructor.name] = dao;
   }
 }
 
