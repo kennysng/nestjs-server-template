@@ -1,4 +1,4 @@
-import { IRequest } from './interface';
+import type { IRequest } from './interface';
 import { NotFound } from 'http-errors';
 
 import { fixUrl } from './utils';

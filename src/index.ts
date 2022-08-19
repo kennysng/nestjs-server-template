@@ -179,7 +179,6 @@ function masterMain(config: IMasterConfig) {
         }
         throw new NotFound('Page Not Found');
       } catch (e) {
-        console.log('status2', e.statusCode);
         return {
           statusCode: e.statusCode || 500,
           message: e.message,

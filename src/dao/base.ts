@@ -10,8 +10,8 @@ import capitalize from 'capitalize';
 import deepmerge from 'deepmerge';
 import { EventEmitter } from 'events';
 import { InternalServerError, NotFound } from 'http-errors';
-import { Logger } from 'pino';
-import { Model, Sequelize } from 'sequelize-typescript';
+import type { Logger } from 'pino';
+import type { Model, Sequelize } from 'sequelize-typescript';
 
 import logger from '../logger';
 import { inTransaction, logSection } from '../utils';
@@ -24,7 +24,7 @@ export class DaoHelper {
 
   constructor(private readonly sequelize: Sequelize) {}
 
-  get<T>(model: MyModel<any>) {
+  get<M extends Model, T = BaseDao<M>>(model: MyModel<M>): T {
     if (!this.daos[model.constructor.name]) {
       this.daos[model.constructor.name] = new BaseDao(this.sequelize, model);
     }
