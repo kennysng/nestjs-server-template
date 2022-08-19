@@ -18,7 +18,7 @@ export class Dependencies {
   }
 
   get<T>(dependency: new (...args: any[]) => T): T {
-    const key = dependency.constructor.name;
+    const key = dependency.name;
     const result = this.dependencies[key];
     if (!result) throw new InternalServerError(`Dependency ${key} Not Found`);
     return result;

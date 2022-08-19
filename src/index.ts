@@ -203,7 +203,6 @@ function workerMain(config: IWorkerConfig) {
     const redisConfig = config.redis || {};
 
     const dependencies = new Dependencies();
-    dependencies.register(myLogger);
 
     if (config.database) {
       const sequelizeLogger = logger('Sequelize');
@@ -238,7 +237,7 @@ function workerMain(config: IWorkerConfig) {
           await sequelize.sync({ alter: true });
         });
       }
-      dependencies.register(sequelize);
+      dependencies.register(sequelize); // Sequelize
 
       const daoHelper = new DaoHelper(sequelize);
       for (const [daoClass, customDao, options] of daos) {
@@ -247,7 +246,7 @@ function workerMain(config: IWorkerConfig) {
           new customDao(sequelize, daoHelper, options),
         );
       }
-      dependencies.register(daoHelper);
+      dependencies.register(daoHelper); // DaoHelper
     }
 
     const dependencies_ = require('./dependency') || {};
