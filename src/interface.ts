@@ -3,7 +3,6 @@ import type { Logger } from 'pino';
 import type { Includeable } from 'sequelize';
 
 import { InternalServerError } from 'http-errors';
-import { UserType } from './model/user-role.model';
 
 export class Dependencies {
   private static instance: Dependencies;
@@ -82,7 +81,6 @@ export interface IMapper {
 
 export interface IUser {
   id: number;
-  roles: Array<{ organisationId?: number; type: UserType }>;
   // TODO
 }
 
