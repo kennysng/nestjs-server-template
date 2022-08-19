@@ -41,8 +41,7 @@ coverage
 
 # local files
 configs/*.yaml
-!configs/config.template.yaml
-src/modules/mapper.json
+src/mapper.json
 .local
 *.env
 keys/*.ppk

@@ -9,7 +9,6 @@ import * as _cluster from 'cluster';
 import fastify from 'fastify';
 import { readFile } from 'fs/promises';
 import { InternalServerError, NotFound, RequestTimeout } from 'http-errors';
-import httpStatus = require('http-status');
 import yaml = require('js-yaml');
 import uniq = require('lodash.uniq');
 import minimist = require('minimist');
@@ -18,6 +17,7 @@ import { cpus } from 'os';
 import { resolve } from 'path';
 import { Sequelize } from 'sequelize-typescript';
 import { URL } from 'url';
+import httpErrors = require('http-errors');
 
 import daos from './dao';
 import { DaoHelper } from './dao/base';
@@ -29,7 +29,6 @@ import {
   IRequest,
   IResult,
   IUser,
-  IWorker,
   IWorkerConfig,
 } from './interface';
 import { ServerType } from './interface';
@@ -43,7 +42,6 @@ const argv = minimist(process.argv.slice(2));
 
 const NODE_ENV = (process.env.NODE_ENV =
   argv.env || argv.E || process.env.NODE_ENV || 'development');
-const template = argv.template || argv.T;
 
 const queues: Record<'server' | 'worker', Record<string, Queue>> = {
   server: {},
@@ -79,7 +77,7 @@ function wait<T>(queue: Queue, job: Job<T>, timeout: number) {
       clearTimeout(timer);
       resolve({ ...result, elapsed: Date.now() - start });
     });
-    job.on('failed', (e) => reject(e));
+    job.on('failed', (e) => reject(new httpErrors[e.message]() || e));
   });
 }
 
@@ -88,11 +86,7 @@ function masterMain(config: IMasterConfig) {
     const port = config.port || 8080;
     const redisConfig = config.redis || {};
 
-    const mapperPath = resolve(
-      __dirname,
-      'modules',
-      `mapper${template ? '.template' : ''}.json`,
-    );
+    const mapperPath = resolve(__dirname, 'mapper.json');
     const content = await readFile(mapperPath, 'utf8');
     const mapper = JSON.parse(content) as IMapper[];
 
@@ -120,7 +114,7 @@ function masterMain(config: IMasterConfig) {
               const queue = connect('server', key, redisConfig, request.log);
               const data: IRequest = {
                 method: 'HEALTH',
-                url: request.url,
+                url: '',
                 query: {},
                 params: {},
               };
@@ -141,48 +135,56 @@ function masterMain(config: IMasterConfig) {
 
     // RESTful api call
     app.all('*', async (request, reply) => {
-      const url = new URL(request.url, `http://localhost:${port}`);
-      for (const { path, before = [], after = [], queue: key } of mapper) {
-        const { matches } = match(path, url.pathname);
-        if (matches) {
-          const queue = connect('server', key, redisConfig, request.log);
-          let data = {
-            method: request.method,
-            url: request.url,
-            query: request.query,
-            params: request.params,
-            body: request.body,
-            user: request.user as IUser,
-          };
-          for (const middleware of before) {
-            data =
-              (await middlewares_[middleware]({
-                config,
-                request,
-                reply,
-                jobData: data,
-              })) || data;
+      try {
+        const url = new URL(request.url, `http://localhost:${port}`);
+        for (const { path, before = [], after = [], queue: key } of mapper) {
+          const { matches } = match(path, url.pathname);
+          if (matches) {
+            const queue = connect('server', key, redisConfig, request.log);
+            let data = {
+              method: request.method,
+              url: request.url,
+              query: request.query,
+              params: request.params,
+              body: request.body,
+              user: request.user as IUser,
+            };
+            for (const middleware of before) {
+              data =
+                (await middlewares_[middleware]({
+                  config,
+                  request,
+                  reply,
+                  jobData: data,
+                })) || data;
+            }
+            const job = await queue.createJob(data).save();
+            let result = await wait<IRequest>(
+              queue,
+              job,
+              config.timeout || 30 * 1000,
+            );
+            for (const middleware of after) {
+              result =
+                (await middlewares_[middleware]({
+                  config,
+                  request,
+                  reply,
+                  jobData: data,
+                  result,
+                })) || result;
+            }
+            return result;
           }
-          const job = await queue.createJob(data).save();
-          let result = await wait<IRequest>(
-            queue,
-            job,
-            config.timeout || 30 * 1000,
-          );
-          for (const middleware of after) {
-            result =
-              (await middlewares_[middleware]({
-                config,
-                request,
-                reply,
-                jobData: data,
-                result,
-              })) || result;
-          }
-          return result;
         }
+        throw new NotFound('Page Not Found');
+      } catch (e) {
+        console.log('status2', e.statusCode);
+        return {
+          statusCode: e.statusCode || 500,
+          message: e.message,
+        };
       }
-      throw new NotFound('Page Not Found');
     });
 
     process.on('beforeExit', () => {
@@ -221,7 +223,7 @@ function workerMain(config: IWorkerConfig) {
         port,
         username,
         password,
-        models: await import(resolve(__dirname, 'models', 'index')).then(
+        models: await import(resolve(__dirname, 'model', 'index')).then(
           (m) => m.default,
         ),
         logging: (sql, timing) =>
@@ -249,7 +251,7 @@ function workerMain(config: IWorkerConfig) {
       dependencies.register(daoHelper);
     }
 
-    const dependencies_ = require('./dependencies') || {};
+    const dependencies_ = require('./dependency') || {};
     await Promise.all(
       Object.keys(dependencies_).map(async (key) => {
         dependencies.register(await dependencies_[key](config));
@@ -258,23 +260,19 @@ function workerMain(config: IWorkerConfig) {
 
     Promise.all(
       config.modules.map((key) =>
-        import(resolve(__dirname, 'modules', key)).then(
-          async ({
-            health = () => ({ statusCode: httpStatus.OK }),
-            process,
-          }: IWorker) => {
+        import(resolve(__dirname, 'queue', key)).then(
+          async ({ default: module }) => {
             const queue = await connect('worker', key, redisConfig, myLogger);
+            const queueInst = new module(dependencies);
             return queue.process(
-              async (job: Job<IRequest>, done: DoneCallback<IResult>) => {
-                try {
-                  const result =
-                    job.data.method === 'HEALTH'
-                      ? await health(dependencies)
-                      : await process(job.data, dependencies);
-                  return done(null, result);
-                } catch (e) {
-                  return done(e);
-                }
+              (job: Job<IRequest>, done: DoneCallback<IResult>) => {
+                myLogger.info(job.data);
+                queueInst
+                  .run(job.data)
+                  .then((result) => done(null, result))
+                  .catch((e) =>
+                    done(e.statusCode ? new Error(e.statusCode) : e),
+                  );
               },
             );
           },
@@ -286,7 +284,7 @@ function workerMain(config: IWorkerConfig) {
 
 async function main() {
   const content = await readFile(
-    resolve('configs', `config.${template ? 'template' : NODE_ENV}.yaml`),
+    resolve('configs', `config.${NODE_ENV}.yaml`),
     'utf8',
   );
   const config = yaml.load(content) as IConfig;

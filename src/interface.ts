@@ -101,11 +101,6 @@ export interface IResult<T = any> {
   elapsed?: number;
 }
 
-export interface IWorker {
-  health(dependencies: Dependencies);
-  process(data: IRequest, dependencies: Dependencies);
-}
-
 export interface IMiddlewareArgs {
   config: IMasterConfig;
   request: FastifyRequest;
