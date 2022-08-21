@@ -21,7 +21,7 @@ export function Guard(...guardFuncs: CheckData[]) {
     const func = descriptor.value;
     descriptor.value = (data: IRequest<any>) => {
       const result = guardFuncs.reduce((r, f) => r && f(data), true);
-      if (result === false) throw new Forbidden();
+      if (!result) throw new Forbidden();
       if (func) func(data);
     };
   };
