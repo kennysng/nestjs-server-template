@@ -9,6 +9,7 @@ import * as _cluster from 'cluster';
 import fastify from 'fastify';
 import { readFile } from 'fs/promises';
 import { InternalServerError, NotFound, RequestTimeout } from 'http-errors';
+import httpErrors = require('http-errors');
 import yaml = require('js-yaml');
 import uniq = require('lodash.uniq');
 import minimist = require('minimist');
@@ -17,7 +18,6 @@ import { cpus } from 'os';
 import { resolve } from 'path';
 import { Sequelize } from 'sequelize-typescript';
 import { URL } from 'url';
-import httpErrors = require('http-errors');
 
 import daos from './dao';
 import { DaoHelper } from './dao/base';

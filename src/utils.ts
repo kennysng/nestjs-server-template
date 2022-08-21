@@ -1,6 +1,5 @@
 import type { Logger } from 'pino';
 import type { Transaction } from 'sequelize';
-
 import type { Sequelize } from 'sequelize-typescript';
 
 type Result<T> = {

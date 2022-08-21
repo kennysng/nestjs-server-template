@@ -1,16 +1,33 @@
 import type { IRequest } from './interface';
-import { NotFound } from 'http-errors';
+
+import { Forbidden, NotFound } from 'http-errors';
 
 import { fixUrl } from './utils';
 
-type CheckUrl = (data: IRequest<any>) => boolean;
+type CheckData = (data: IRequest<any>) => boolean;
 
-const registered: Record<
+const paths: Record<
   string,
-  Record<string, Array<[CheckUrl, (data: IRequest<any>) => any]>>
+  Record<string, Array<[CheckData, (data: IRequest<any>) => any]>>
 > = {};
 
-export function Path(method: string, url: string | CheckUrl = '') {
+export function Guard(...guardFuncs: CheckData[]) {
+  return function (
+    target: any,
+    propertyKey: string,
+    // eslint-disable-next-line
+    descriptor: TypedPropertyDescriptor<(data: IRequest<any>) => any>,
+  ) {
+    const func = descriptor.value;
+    descriptor.value = (data: IRequest<any>) => {
+      const result = guardFuncs.reduce((r, f) => r && f(data), true);
+      if (result === false) throw new Forbidden();
+      if (func) func(data);
+    };
+  };
+}
+
+export function Path(method: string, url: string | CheckData = '') {
   if (typeof url === 'string') {
     const url_ = url;
     url = ({ url: url__ }) => fixUrl(url_) === fixUrl(url__);
@@ -23,13 +40,13 @@ export function Path(method: string, url: string | CheckUrl = '') {
   ) {
     // eslint-disable-next-line
     const func = descriptor.value!;
-    if (!registered[target.constructor.name]) {
-      registered[target.constructor.name] = {};
+    if (!paths[target.constructor.name]) {
+      paths[target.constructor.name] = {};
     }
-    if (!registered[target.constructor.name][method]) {
-      registered[target.constructor.name][method] = [];
+    if (!paths[target.constructor.name][method]) {
+      paths[target.constructor.name][method] = [];
     }
-    registered[target.constructor.name][method].push([url as CheckUrl, func]);
+    paths[target.constructor.name][method].push([url as CheckData, func]);
   };
 }
 
@@ -46,10 +63,10 @@ export function Queue<T extends { new(...args: any[]): any }>(baseUrl = '') {
 
     return class extends constructor {
       find(data: IRequest) {
-        if (!registered[constructor.name][data.method]) {
-          registered[constructor.name][data.method] = [];
+        if (!paths[constructor.name][data.method]) {
+          paths[constructor.name][data.method] = [];
         }
-        return registered[constructor.name][data.method].find(([checkUrl]) =>
+        return paths[constructor.name][data.method].find(([checkUrl]) =>
           checkUrl({ ...data, url: fixUrl(data.url) }),
         );
       }
