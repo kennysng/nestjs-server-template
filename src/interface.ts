@@ -87,6 +87,7 @@ export interface IUser {
 export interface IRequest<Q = any, P = any, B = any> {
   method: string;
   url: string;
+  headers: Record<string, string | string[]>;
   query: Q;
   params: P;
   body?: B;

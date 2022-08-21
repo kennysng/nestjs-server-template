@@ -118,6 +118,7 @@ function masterMain(config: IMasterConfig) {
               const data: IRequest = {
                 method: 'HEALTH',
                 url: '',
+                headers: request.headers,
                 query: {},
                 params: {},
               };
@@ -148,6 +149,7 @@ function masterMain(config: IMasterConfig) {
             let data = {
               method: request.method,
               url: request.url,
+              headers: request.headers,
               query: request.query,
               params: request.params,
               body: request.body,
