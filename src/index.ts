@@ -267,7 +267,7 @@ function workerMain(config: IWorkerConfig) {
         import(resolve(__dirname, 'queue', key)).then(
           async ({ default: module }) => {
             const queue = await connect('worker', key, redisConfig, myLogger);
-            const queueInst = new module(dependencies);
+            const queueInst = new module(config, dependencies);
             return queue.process(
               (job: Job<IRequest>, done: DoneCallback<IResult>) => {
                 myLogger.info(job.data);
