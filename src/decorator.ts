@@ -50,7 +50,7 @@ export function Queue<T extends { new(...args: any[]): any }>(baseUrl = '') {
           registered[constructor.name][data.method] = [];
         }
         return registered[constructor.name][data.method].find(([checkUrl]) =>
-          checkUrl(data),
+          checkUrl({ ...data, url: fixUrl(data.url) }),
         );
       }
 
