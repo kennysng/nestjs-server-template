@@ -16,7 +16,6 @@ import minimist = require('minimist');
 import { match } from 'node-match-path';
 import { cpus } from 'os';
 import { resolve } from 'path';
-import { Sequelize } from 'sequelize-typescript';
 import { URL } from 'url';
 
 import daos from './dao';
@@ -35,6 +34,7 @@ import { ServerType } from './interface';
 import logger from './logger';
 import * as middlewares_ from './middleware';
 import { logSection } from './utils';
+import { connect as connectDB } from './sequelize';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
@@ -48,7 +48,7 @@ const queues: Record<'server' | 'worker', Record<string, Queue>> = {
   worker: {},
 };
 
-function connect(
+function connectQueue(
   type: 'server' | 'worker',
   key: string,
   redisConfig: any,
@@ -114,7 +114,12 @@ function masterMain(config: IMasterConfig) {
           keys.map<Promise<IResult>>(async (key) => {
             let job: Job<IRequest>;
             try {
-              const queue = connect('server', key, redisConfig, request.log);
+              const queue = connectQueue(
+                'server',
+                key,
+                redisConfig,
+                request.log,
+              );
               const data: IRequest = {
                 method: 'HEALTH',
                 url: '',
@@ -145,7 +150,7 @@ function masterMain(config: IMasterConfig) {
         for (const { path, before = [], after = [], queue: key } of mapper) {
           const { matches } = match(path, url.pathname);
           if (matches) {
-            const queue = connect('server', key, redisConfig, request.log);
+            const queue = connectQueue('server', key, redisConfig, request.log);
             let data = {
               method: request.method,
               url: request.url,
@@ -211,38 +216,7 @@ function workerMain(config: IWorkerConfig) {
     const dependencies = new Dependencies();
 
     if (config.database) {
-      const sequelizeLogger = logger('Sequelize');
-      const {
-        dialect = 'mariadb',
-        host = 'localhost',
-        port = 3306,
-        username,
-        password,
-        database,
-        sync,
-      } = config.database;
-      const sequelize = new Sequelize({
-        dialect: dialect as any,
-        host,
-        port,
-        username,
-        password,
-        models: await import(resolve(__dirname, 'model', 'index')).then(
-          (m) => m.default,
-        ),
-        logging: (sql, timing) =>
-          sequelizeLogger.info({ sql, elapsed: timing }),
-      });
-      if (sync) {
-        logSection('Rebuild Database', sequelizeLogger, async () => {
-          await sequelize.query(`
-            DROP SCHEMA IF EXISTS \`${database}\`;
-            CREATE SCHEMA IF NOT EXISTS \`${database}\`;
-            USE \`${database}\`;
-          `);
-          await sequelize.sync({ alter: true });
-        });
-      }
+      const sequelize = await connectDB(config);
       dependencies.register(sequelize); // Sequelize
 
       const daoHelper = new DaoHelper(sequelize);
@@ -266,7 +240,12 @@ function workerMain(config: IWorkerConfig) {
       config.modules.map((key) =>
         import(resolve(__dirname, 'queue', key)).then(
           async ({ default: module }) => {
-            const queue = await connect('worker', key, redisConfig, myLogger);
+            const queue = await connectQueue(
+              'worker',
+              key,
+              redisConfig,
+              myLogger,
+            );
             const queueInst = new module(config, dependencies);
             return queue.process(
               (job: Job<IRequest>, done: DoneCallback<IResult>) => {
