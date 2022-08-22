@@ -53,7 +53,8 @@ interface ITokenOptions {
 
 export interface ICache {
   public?: boolean;
-  maxAge: number;
+  maxAge?: number;
+  lastModified?: string;
 }
 
 export interface IMasterConfig extends IBaseConfig {

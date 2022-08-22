@@ -297,18 +297,15 @@ async function main() {
 
   let serverType: ServerType;
   switch (true) {
-    case 'port' in config && 'modules' in config: {
+    case 'port' in config && 'modules' in config:
       serverType = ServerType.HYBRID;
       break;
-    }
-    case 'port' in config: {
+    case 'port' in config:
       serverType = ServerType.MASTER;
       break;
-    }
-    case 'modules' in config: {
+    case 'modules' in config:
       serverType = ServerType.WORKER;
       break;
-    }
   }
 
   if (!clusters) {

@@ -73,18 +73,21 @@ export function concat(source: string, segment: string, delimit = ', ') {
 
 export function applyCache(
   reply: FastifyReply,
-  { public: public_, maxAge }: ICache,
+  { public: public_, maxAge, lastModified }: ICache,
 ) {
   let cache = '';
   if (typeof public_ === 'boolean') {
     cache += public_ ? 'public' : 'private';
   }
-  if (typeof maxAge) {
+  if (typeof maxAge === 'number') {
     cache = concat(
       cache,
       `${public_ === false ? 's-maxage' : 'max-age'}=${maxAge}`,
     );
     reply.header('expires', DateTime.local().plus({ second: maxAge }).toHTTP());
+  }
+  if (typeof lastModified === 'string') {
+    reply.header('last-modified', lastModified);
   }
   reply.header('cache-control', cache);
 }
