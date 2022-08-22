@@ -9,7 +9,14 @@ import httpStatus from 'http-status';
 
 type CheckData = (data: IRequest<any>) => boolean;
 type PathFunction = (data: IRequest<any>) => IResult | Promise<IResult>;
-type GetLastModified = () => Date | string | number;
+
+/* eslint-disable */
+type GetLastModified = (data: IRequest<any>) =>
+  | Date
+  | string
+  | number
+  | Promise<Date | string | number>;
+/* eslint-enable */
 
 const paths: Record<
   string,
@@ -33,7 +40,7 @@ export function Guard(...guardFuncs: CheckData[]) {
 }
 
 export function LastModified(getFunc: GetLastModified) {
-  return async function (
+  return function (
     target: any,
     propertyKey: string,
     // eslint-disable-next-line
@@ -45,7 +52,7 @@ export function LastModified(getFunc: GetLastModified) {
         data.headers['if-modified-since'] as string,
       );
       let target: DateTime;
-      const value: Date | string | number = await getFunc.apply(this, []);
+      const value: Date | string | number = await getFunc.apply(this, [data]);
       switch (typeof value) {
         case 'string':
           target = DateTime.fromISO(value);
