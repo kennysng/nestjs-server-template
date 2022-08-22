@@ -3,6 +3,7 @@ import type { IRequest } from './interface';
 import { Forbidden, NotFound } from 'http-errors';
 
 import { fixUrl } from './utils';
+import { match } from 'node-match-path';
 
 type CheckData = (data: IRequest<any>) => boolean;
 
@@ -30,7 +31,7 @@ export function Guard(...guardFuncs: CheckData[]) {
 export function Path(method: string, url: string | CheckData = '') {
   if (typeof url === 'string') {
     const url_ = url;
-    url = ({ url: url__ }) => fixUrl(url_) === fixUrl(url__);
+    url = ({ url: url__ }) => !!match(fixUrl(url_), fixUrl(url__));
   }
   return function (
     target: any,
