@@ -35,6 +35,15 @@ interface IBaseConfig {
     username?: string;
     password?: string;
   };
+  database?: {
+    dialect?: string;
+    host?: string;
+    port?: number;
+    username: string;
+    password: string;
+    database: string;
+    sync?: boolean;
+  };
 }
 
 interface ITokenOptions {
@@ -53,15 +62,6 @@ export interface IMasterConfig extends IBaseConfig {
 
 export interface IWorkerConfig extends IBaseConfig {
   modules: string[];
-  database?: {
-    dialect?: string;
-    host?: string;
-    port?: number;
-    username: string;
-    password: string;
-    database: string;
-    sync?: boolean;
-  };
 }
 
 export type IConfig = IMasterConfig | IWorkerConfig;

@@ -1,4 +1,4 @@
-import type { IMiddlewareArgs, IWorkerConfig } from './interface';
+import type { IMiddlewareArgs } from './interface';
 
 import { InternalServerError, Unauthorized } from 'http-errors';
 import { Sequelize } from 'sequelize-typescript';
@@ -13,10 +13,7 @@ declare module 'fastify' {
 }
 
 export async function connectDB({ config, request }: IMiddlewareArgs) {
-  if (!sequelize) {
-    const config_ = config as unknown as IWorkerConfig;
-    sequelize = await connect(config_, true);
-  }
+  if (!sequelize) sequelize = await connect(config, true);
   request.sequelize = sequelize;
 }
 
