@@ -1,4 +1,4 @@
-import type { IRequest } from './interface';
+import type { IRequest, IResult } from './interface';
 
 import { Forbidden, NotFound } from 'http-errors';
 
@@ -6,10 +6,11 @@ import { fixUrl } from './utils';
 import { match } from 'node-match-path';
 
 type CheckData = (data: IRequest<any>) => boolean;
+type PathFunction = (data: IRequest<any>) => IResult | Promise<IResult>;
 
 const paths: Record<
   string,
-  Record<string, Array<[CheckData, (data: IRequest<any>) => any]>>
+  Record<string, Array<[CheckData, PathFunction]>>
 > = {};
 
 export function Guard(...guardFuncs: CheckData[]) {
@@ -17,13 +18,13 @@ export function Guard(...guardFuncs: CheckData[]) {
     target: any,
     propertyKey: string,
     // eslint-disable-next-line
-    descriptor: TypedPropertyDescriptor<(data: IRequest<any>) => any>,
+    descriptor: TypedPropertyDescriptor<PathFunction>,
   ) {
-    const func = descriptor.value;
-    descriptor.value = (data: IRequest<any>) => {
+    const func = descriptor.value!;
+    descriptor.value = async (data: IRequest<any>) => {
       const result = guardFuncs.reduce((r, f) => r && f(data), true);
       if (!result) throw new Forbidden();
-      if (func) func(data);
+      return await func(data);
     };
   };
 }
@@ -37,17 +38,18 @@ export function Path(method: string, url: string | CheckData = '') {
     target: any,
     propertyKey: string,
     // eslint-disable-next-line
-    descriptor: TypedPropertyDescriptor<(...args: any[]) => any>,
+    descriptor: TypedPropertyDescriptor<PathFunction>,
   ) {
     // eslint-disable-next-line
     const func = descriptor.value!;
     if (!paths[target.constructor.name]) {
       paths[target.constructor.name] = {};
     }
-    if (!paths[target.constructor.name][method]) {
-      paths[target.constructor.name][method] = [];
+    const METHOD = method.toLocaleUpperCase();
+    if (!paths[target.constructor.name][METHOD]) {
+      paths[target.constructor.name][METHOD] = [];
     }
-    paths[target.constructor.name][method].push([url as CheckData, func]);
+    paths[target.constructor.name][METHOD].push([url as CheckData, func]);
   };
 }
 
