@@ -1,6 +1,11 @@
+import { FastifyBaseLogger } from 'fastify';
 import type { Logger } from 'pino';
 import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
+import type { Job } from 'bee-queue';
+import httpErrors from 'http-errors';
+import Queue from 'bee-queue';
+import { IResult } from './interface';
 
 type Result<T> = {
   result?: T;
@@ -8,6 +13,54 @@ type Result<T> = {
   start: number;
   end: number;
 };
+
+const queues: Record<'server' | 'worker', Record<string, Queue>> = {
+  server: {},
+  worker: {},
+};
+
+// close queue connections
+process.on('beforeExit', () => {
+  Promise.allSettled([
+    ...Object.values(queues.server).map((q) => q.close()),
+    ...Object.values(queues.worker).map((q) => q.close()),
+  ]);
+});
+
+export function connectQueue(
+  type: 'server' | 'worker',
+  key: string,
+  redisConfig: any,
+  logger: FastifyBaseLogger,
+) {
+  let queue = queues[type][key];
+  if (!queue) {
+    queue = queues[type][key] = new Queue(key, {
+      isWorker: type === 'worker',
+      redis: redisConfig,
+    });
+    logger.info(`Queue '${key}' connecting ...`);
+    queue.on('ready', () => logger.info(`Queue '${key}' is ready`));
+  }
+  return queue;
+}
+
+export function wait<T>(queue: Queue, job: Job<T>, timeout: number) {
+  const start = Date.now();
+  return new Promise<IResult>((resolve, reject) => {
+    const timer = setTimeout(async () => {
+      queue.removeJob(job.id);
+      reject(new httpErrors.RequestTimeout());
+    }, timeout);
+    job.on('succeeded', (result: IResult) => {
+      clearTimeout(timer);
+      resolve({ ...result, elapsed: Date.now() - start });
+    });
+    job.on('failed', (e) =>
+      reject(httpErrors[e.message] ? new httpErrors[e.message]() : e),
+    );
+  });
+}
 
 export function fixUrl(url: string) {
   if (!url.startsWith('/')) url = '/' + url;

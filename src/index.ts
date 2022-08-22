@@ -1,15 +1,12 @@
 import type { DoneCallback, Job } from 'bee-queue';
-import type { FastifyBaseLogger } from 'fastify';
 
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
 import { fastifyJwt } from '@fastify/jwt';
-import Queue = require('bee-queue');
 import * as _cluster from 'cluster';
 import fastify from 'fastify';
 import { readFile } from 'fs/promises';
-import { InternalServerError, NotFound, RequestTimeout } from 'http-errors';
-import httpErrors = require('http-errors');
+import { InternalServerError, NotFound } from 'http-errors';
 import yaml = require('js-yaml');
 import uniq = require('lodash.uniq');
 import minimist = require('minimist');
@@ -33,7 +30,7 @@ import {
 import { ServerType } from './interface';
 import logger from './logger';
 import * as middlewares_ from './middleware';
-import { logSection } from './utils';
+import { connectQueue, logSection, wait } from './utils';
 import { connect as connectDB } from './sequelize';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
@@ -42,46 +39,6 @@ const argv = minimist(process.argv.slice(2));
 
 const NODE_ENV = (process.env.NODE_ENV =
   argv.env || argv.E || process.env.NODE_ENV || 'development');
-
-const queues: Record<'server' | 'worker', Record<string, Queue>> = {
-  server: {},
-  worker: {},
-};
-
-function connectQueue(
-  type: 'server' | 'worker',
-  key: string,
-  redisConfig: any,
-  logger: FastifyBaseLogger,
-) {
-  let queue = queues[type][key];
-  if (!queue) {
-    queue = queues[type][key] = new Queue(key, {
-      isWorker: type === 'worker',
-      redis: redisConfig,
-    });
-    logger.info(`Queue '${key}' connecting ...`);
-    queue.on('ready', () => logger.info(`Queue '${key}' is ready`));
-  }
-  return queue;
-}
-
-function wait<T>(queue: Queue, job: Job<T>, timeout: number) {
-  const start = Date.now();
-  return new Promise<IResult>((resolve, reject) => {
-    const timer = setTimeout(async () => {
-      queue.removeJob(job.id);
-      reject(new RequestTimeout());
-    }, timeout);
-    job.on('succeeded', (result: IResult) => {
-      clearTimeout(timer);
-      resolve({ ...result, elapsed: Date.now() - start });
-    });
-    job.on('failed', (e) =>
-      reject(httpErrors[e.message] ? new httpErrors[e.message]() : e),
-    );
-  });
-}
 
 function masterMain(config: IMasterConfig) {
   logSection('Initialize Server', logger('Server'), async () => {
@@ -195,13 +152,6 @@ function masterMain(config: IMasterConfig) {
           message: e.message,
         };
       }
-    });
-
-    process.on('beforeExit', () => {
-      Promise.allSettled([
-        ...Object.values(queues.server).map((q) => q.close()),
-        ...Object.values(queues.worker).map((q) => q.close()),
-      ]);
     });
 
     await app.listen({ host: '0.0.0.0', port });

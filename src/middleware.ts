@@ -1,4 +1,4 @@
-import type { IMiddlewareArgs } from './interface';
+import type { IMiddlewareArgs, IUser } from './interface';
 
 import { InternalServerError, Unauthorized } from 'http-errors';
 import { Sequelize } from 'sequelize-typescript';
@@ -16,6 +16,7 @@ process.on('beforeExit', () => sequelize?.close());
 declare module 'fastify' {
   interface FastifyRequest {
     daoHelper?: DaoHelper;
+    payload?: IUser;
   }
 }
 
