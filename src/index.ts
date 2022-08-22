@@ -81,11 +81,19 @@ function masterMain(config: IMasterConfig) {
             };
             job = await queue.createJob(data).save();
             const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
-            return { ...result, result: { queue: key } };
+            return {
+              ...result,
+              message:
+                result.message ||
+                (httpStatus[`${result.statusCode}_NAME`] as string),
+              result: { queue: key },
+            };
           } catch (e) {
             return {
               statusCode: e.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-              message: e.message,
+              message:
+                e.message ||
+                (httpStatus[`${result.statusCode}_NAME`] as string),
               result: { queue: key },
             };
           }
@@ -145,6 +153,11 @@ function masterMain(config: IMasterConfig) {
                   jobData: data,
                   result,
                 })) || result;
+            }
+            if (!result.message) {
+              result.message = httpStatus[
+                `${result.statusCode}_NAME`
+              ] as string;
             }
             return result;
           }
