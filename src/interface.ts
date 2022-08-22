@@ -89,15 +89,39 @@ export interface IUser {
   // TODO
 }
 
-export interface IRequest<B = any, P = any, Q = any> {
-  method: string;
+/* eslint-disable */
+export type HttpMethods =
+  | 'ALL'
+  | 'HEALTH'
+  | 'GET'
+  | 'HEAD'
+  | 'POST'
+  | 'PUT'
+  | 'DELETE'
+  | 'CONNECT'
+  | 'OPTIONS'
+  | 'TRACE'
+  | 'PATCH';
+/* eslint-enable */
+
+interface IBaseRequest<Q, P> {
+  method: HttpMethods;
   url: string;
   headers: Record<string, string | string[]>;
   query: Q;
   params: P;
-  body?: B;
   user?: IUser;
 }
+
+export interface IBodyRequest<B = any, Q = any, P = any>
+  extends IBaseRequest<Q, P> {
+  method: 'ALL' | 'POST' | 'PUT' | 'PATCH';
+  body?: B;
+}
+
+export type IRequest<B = any, Q = any, P = any> =
+  | IBaseRequest<Q, P>
+  | IBodyRequest<B, Q, P>;
 
 export interface IResult<T = any> {
   statusCode: number;

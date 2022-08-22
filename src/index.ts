@@ -19,6 +19,8 @@ import daos from './dao';
 import { DaoHelper } from './dao/base';
 import {
   Dependencies,
+  HttpMethods,
+  IBodyRequest,
   IConfig,
   IMapper,
   IMasterConfig,
@@ -94,7 +96,7 @@ function masterMain(config: IMasterConfig) {
         statusCode: unavailable
           ? httpStatus.SERVICE_UNAVAILABLE
           : httpStatus.OK,
-        message: unavailable ? httpStatus[500] : httpStatus[200],
+        message: unavailable ? httpStatus['500_NAME'] : httpStatus['200_NAME'],
         result,
       };
     });
@@ -108,15 +110,17 @@ function masterMain(config: IMasterConfig) {
           const { matches } = match(path, url.pathname);
           if (matches) {
             const queue = connectQueue('server', key, redisConfig, request.log);
-            let data = {
-              method: request.method,
+            let data: IRequest = {
+              method: request.method as HttpMethods,
               url: request.url,
               headers: request.headers,
               query: request.query,
               params: request.params,
-              body: request.body,
               user: request.user as IUser,
             };
+            if (['POST', 'PUT', 'PATCH'].indexOf(data.method) > -1) {
+              (data as IBodyRequest).body = request.body;
+            }
             for (const middleware of before) {
               data =
                 (await middlewares_[middleware]({
