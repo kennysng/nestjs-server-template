@@ -169,6 +169,7 @@ function masterMain(config: IMasterConfig) {
                 `${result.statusCode}_NAME`
               ] as string;
             }
+            reply.status(result.statusCode);
             return {
               ...result,
               elapsed: Date.now() - start,
