@@ -32,7 +32,7 @@ export function Guard(...guardFuncs: CheckData[]) {
   };
 }
 
-export function lastModified(getFunc: GetLastModified) {
+export function LastModified(getFunc: GetLastModified) {
   return async function (
     target: any,
     propertyKey: string,
