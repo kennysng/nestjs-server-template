@@ -25,7 +25,7 @@ export class Dependencies {
   }
 }
 
-interface IBaseConfig {
+export interface IBaseConfig {
   clusters?: boolean | number;
   timeout?: number;
   redis?: {
@@ -79,6 +79,11 @@ export interface IMapper {
   queue: string;
 }
 
+export interface IJwtPayload {
+  i: number; // id
+  // TODO
+}
+
 export interface IUser {
   id: number;
   // TODO
@@ -100,6 +105,7 @@ export interface IResult<T = any> {
   message?: string;
   result?: T;
   elapsed?: number;
+  payload?: IJwtPayload;
 }
 
 export interface IMiddlewareArgs {

@@ -1,6 +1,6 @@
 import { resolve } from 'path';
 import { Sequelize } from 'sequelize-typescript';
-import { IMasterConfig } from './interface';
+import { IBaseConfig } from './interface';
 import logger from './logger';
 import { logSection } from './utils';
 
@@ -13,7 +13,7 @@ async function checkDatabase(sequelize: Sequelize, database: string) {
   return result.length[0].length === 1;
 }
 
-export async function connect(config: IMasterConfig, check = false) {
+export async function connect(config: IBaseConfig, check = false) {
   const sequelizeLogger = logger('Sequelize');
   const {
     dialect = 'mariadb',
