@@ -6,7 +6,7 @@ import { connect } from './sequelize';
 import { sign } from 'jsonwebtoken';
 import { DaoHelper } from './dao/base';
 
-export const deviceTokenKey = 'X-Device-Token';
+export const deviceTokenKey = 'x-device-token';
 
 let sequelize: Sequelize | undefined;
 
@@ -38,6 +38,6 @@ export async function signJwt({ config, reply, result }: IMiddlewareArgs) {
     expiresIn: expires_in,
   });
 
-  reply.header('Authorization', `Bearer ${access_token}`);
+  reply.header('authorization', `Bearer ${access_token}`);
   reply.header(deviceTokenKey, refresh_token);
 }

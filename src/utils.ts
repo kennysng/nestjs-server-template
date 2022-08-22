@@ -84,9 +84,9 @@ export function applyCache(
       cache,
       `${public_ === false ? 's-maxage' : 'max-age'}=${maxAge}`,
     );
-    reply.header('Expires', DateTime.local().plus({ second: maxAge }).toHTTP());
+    reply.header('expires', DateTime.local().plus({ second: maxAge }).toHTTP());
   }
-  reply.header('Cache-Control', cache);
+  reply.header('cache-control', cache);
 }
 
 export function fixUrl(url: string) {
