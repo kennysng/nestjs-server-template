@@ -1,4 +1,4 @@
-import type { IRequest, IResult } from './interface';
+import type { ICache, IRequest, IResult } from './interface';
 
 import { Forbidden, NotFound } from 'http-errors';
 
@@ -25,6 +25,21 @@ export function Guard(...guardFuncs: CheckData[]) {
       const result = guardFuncs.reduce((r, f) => r && f(data), true);
       if (!result) throw new Forbidden();
       return await func(data);
+    };
+  };
+}
+
+export function Cache(options: ICache) {
+  return function (
+    target: any,
+    propertyKey: string,
+    // eslint-disable-next-line
+    descriptor: TypedPropertyDescriptor<PathFunction>,
+  ) {
+    const func = descriptor.value!;
+    descriptor.value = async (data: IRequest<any>) => {
+      const result = await func(data);
+      return { ...result, cache: options };
     };
   };
 }
