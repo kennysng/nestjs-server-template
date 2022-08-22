@@ -10,6 +10,7 @@ export const deviceTokenKey = 'x-device-token';
 
 let sequelize: Sequelize | undefined;
 
+// close DB connection
 process.on('beforeExit', () => sequelize?.close());
 
 declare module 'fastify' {
@@ -28,15 +29,14 @@ export async function authentication({ request }: IMiddlewareArgs) {
 }
 
 export async function signJwt({ config, reply, result }: IMiddlewareArgs) {
-  if (!result.payload) throw new InternalServerError('Invalid Jwt Payload');
+  const payload = result.payload;
+  if (!payload) throw new InternalServerError('Invalid Jwt Payload');
   const { secret, expires_in } = config.auth.refresh_token;
-  const access_token = await reply.jwtSign(result.payload);
-  const refresh_token = await sign(result.payload, secret, {
+  const access_token = await reply.jwtSign(payload);
+  const refresh_token = await sign(payload, secret, {
     expiresIn: expires_in,
   });
 
   reply.header('Authorization', `Bearer ${access_token}`);
   reply.header(deviceTokenKey, refresh_token);
-
-  // TODO save tokens
 }
