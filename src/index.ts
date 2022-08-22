@@ -32,7 +32,7 @@ import {
 import { ServerType } from './interface';
 import logger from './logger';
 import * as middlewares_ from './middleware';
-import { connectQueue, logSection, wait } from './utils';
+import { applyCache, connectQueue, logSection, wait } from './utils';
 import { connect as connectDB } from './sequelize';
 import httpStatus = require('http-status');
 
@@ -61,18 +61,22 @@ function masterMain(config: IMasterConfig) {
     app.register(helmet);
     app.register(compression);
 
+    // jwt
     if (!config.auth.access_token.secret) {
       throw new InternalServerError('Missing Secret for Access Token');
     }
-
     app.register(fastifyJwt, {
       secret: config.auth.access_token.secret,
     });
 
     // health check
-    app.get('/health', async (request) => {
+    app.get('/health', async (request, reply) => {
+      // no cache
+      reply.header('cache-control', 'no-cache, no-store');
+
       const start = Date.now();
       const keys = uniq(mapper.map((m) => m.queue));
+      let statusCode = httpStatus.OK;
       const result = await Promise.all(
         keys.map<Promise<IResult>>(async (key) => {
           let job: Job<IRequest>;
@@ -108,10 +112,10 @@ function masterMain(config: IMasterConfig) {
         }),
       );
       const unavailable = result.find((r) => r.statusCode !== httpStatus.OK);
+      if (unavailable) statusCode = httpStatus.SERVICE_UNAVAILABLE;
+      reply.status(statusCode);
       return {
-        statusCode: unavailable
-          ? httpStatus.SERVICE_UNAVAILABLE
-          : httpStatus.OK,
+        statusCode,
         message: unavailable ? httpStatus['500_NAME'] : httpStatus['200_NAME'],
         elapsed: Date.now() - start,
         result,
@@ -120,66 +124,93 @@ function masterMain(config: IMasterConfig) {
 
     // RESTful api call
     app.all('*', async (request, reply) => {
+      // default cache
+      if (config.cache) applyCache(reply, config.cache);
+
       let job: Job<IRequest>;
       const start = Date.now();
       try {
         const url = new URL(request.url, `http://localhost:${port}`);
-        for (const { path, before = [], after = [], queue: key } of mapper) {
-          const { matches } = match(path, url.pathname);
-          if (matches) {
-            const queue = connectQueue('server', key, redisConfig, request.log);
-            let data: IRequest = {
-              method: request.method as HttpMethods,
-              url: request.url,
-              headers: request.headers,
-              query: request.query,
-              params: request.params,
-              user: request.user as IUser,
-            };
-            if (['POST', 'PUT', 'PATCH'].indexOf(data.method) > -1) {
-              (data as IBodyRequest).body = request.body;
+        for (const {
+          method,
+          path,
+          before = [],
+          after = [],
+          queue: key,
+        } of mapper) {
+          const REQ_METHOD = request.method.toLocaleUpperCase();
+          const MAP_METHOD = method.toLocaleUpperCase();
+          if (REQ_METHOD === MAP_METHOD || 'ALL' === MAP_METHOD) {
+            const { matches } = match(path, url.pathname);
+            if (matches) {
+              const queue = connectQueue(
+                'server',
+                key,
+                redisConfig,
+                request.log,
+              );
+              let data: IRequest = {
+                method: REQ_METHOD as HttpMethods,
+                url: request.url,
+                headers: request.headers,
+                query: request.query,
+                params: request.params,
+                user: request.user as IUser,
+              };
+              if (['POST', 'PUT', 'PATCH'].indexOf(REQ_METHOD) > -1) {
+                (data as IBodyRequest).body = request.body;
+              }
+              for (const middleware of before) {
+                data =
+                  (await middlewares_[middleware]({
+                    config,
+                    request,
+                    reply,
+                    jobData: data,
+                  })) || data;
+              }
+              job = await queue.createJob(data).save();
+              let result = await wait<IRequest>(
+                queue,
+                job,
+                config.timeout || 30 * 1000,
+              );
+              for (const middleware of after) {
+                result =
+                  (await middlewares_[middleware]({
+                    config,
+                    request,
+                    reply,
+                    jobData: data,
+                    result,
+                  })) || result;
+              }
+              if (!result.message) {
+                result.message = httpStatus[
+                  `${result.statusCode}_NAME`
+                ] as string;
+              }
+              reply.status(result.statusCode);
+
+              if (result.cache) {
+                applyCache(reply, result.cache);
+                delete result.cache;
+              }
+
+              return {
+                ...result,
+                elapsed: Date.now() - start,
+              };
             }
-            for (const middleware of before) {
-              data =
-                (await middlewares_[middleware]({
-                  config,
-                  request,
-                  reply,
-                  jobData: data,
-                })) || data;
-            }
-            job = await queue.createJob(data).save();
-            let result = await wait<IRequest>(
-              queue,
-              job,
-              config.timeout || 30 * 1000,
-            );
-            for (const middleware of after) {
-              result =
-                (await middlewares_[middleware]({
-                  config,
-                  request,
-                  reply,
-                  jobData: data,
-                  result,
-                })) || result;
-            }
-            if (!result.message) {
-              result.message = httpStatus[
-                `${result.statusCode}_NAME`
-              ] as string;
-            }
-            reply.status(result.statusCode);
-            return {
-              ...result,
-              elapsed: Date.now() - start,
-            };
           }
         }
-        throw new NotFound('Page Not Found');
+        reply.status(httpStatus.NOT_FOUND);
+        throw new NotFound();
       } catch (e) {
+        const statusCode = e.statusCode || 500;
+        reply.status(statusCode);
         return {
-          statusCode: e.statusCode || 500,
+          statusCode,
           message: e.message,
           elapsed: Date.now() - start,
         };

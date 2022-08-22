@@ -51,9 +51,15 @@ interface ITokenOptions {
   expires_in?: string;
 }
 
+export interface ICache {
+  public?: boolean;
+  maxAge: number;
+}
+
 export interface IMasterConfig extends IBaseConfig {
   port?: number;
   package?: string;
+  cache?: ICache;
   auth: {
     access_token: ITokenOptions;
     refresh_token: ITokenOptions;
@@ -73,6 +79,7 @@ export enum ServerType {
 }
 
 export interface IMapper {
+  method: HttpMethods;
   path: string;
   before?: string[];
   after?: string[];
@@ -130,6 +137,7 @@ export interface IResult<T = any> {
   result?: T;
   elapsed?: number;
   payload?: IJwtPayload;
+  cache?: ICache;
 }
 
 export interface IMiddlewareArgs {

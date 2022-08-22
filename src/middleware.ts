@@ -6,7 +6,7 @@ import { connect } from './sequelize';
 import { sign } from 'jsonwebtoken';
 import { DaoHelper } from './dao/base';
 
-export const deviceTokenKey = 'x-device-token';
+export const deviceTokenKey = 'X-Device-Token';
 
 let sequelize: Sequelize | undefined;
 

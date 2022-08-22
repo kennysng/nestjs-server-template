@@ -1,11 +1,12 @@
-import { FastifyBaseLogger } from 'fastify';
+import { FastifyBaseLogger, FastifyReply } from 'fastify';
 import type { Logger } from 'pino';
 import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
 import type { Job } from 'bee-queue';
 import * as httpErrors from 'http-errors';
 import Queue = require('bee-queue');
-import { IResult } from './interface';
+import { ICache, IResult } from './interface';
+import { DateTime } from 'luxon';
 
 type Result<T> = {
   result?: T;
@@ -63,6 +64,29 @@ export function wait<T, R = any>(
       reject(httpErrors[e.message] ? new httpErrors[e.message]() : e),
     );
   });
+}
+
+export function concat(source: string, segment: string, delimit = ', ') {
+  if (source) source += delimit;
+  return source + segment;
+}
+
+export function applyCache(
+  reply: FastifyReply,
+  { public: public_, maxAge }: ICache,
+) {
+  let cache = '';
+  if (typeof public_ === 'boolean') {
+    cache += public_ ? 'public' : 'private';
+  }
+  if (typeof maxAge) {
+    cache = concat(
+      cache,
+      `${public_ === false ? 's-maxage' : 'max-age'}=${maxAge}`,
+    );
+    reply.header('Expires', DateTime.local().plus({ second: maxAge }).toHTTP());
+  }
+  reply.header('Cache-Control', cache);
 }
 
 export function fixUrl(url: string) {
