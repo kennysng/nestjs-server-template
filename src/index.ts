@@ -38,6 +38,8 @@ import httpStatus = require('http-status');
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
+const base = true;
+
 const argv = minimist(process.argv.slice(2));
 
 const NODE_ENV = (process.env.NODE_ENV =
@@ -48,7 +50,10 @@ function masterMain(config: IMasterConfig) {
     const port = config.port || 8080;
     const redisConfig = config.redis || {};
 
-    const mapperPath = resolve(__dirname, 'mapper.json');
+    const mapperPath = resolve(
+      __dirname,
+      base ? '../templates/mapper.json' : 'mapper.json',
+    );
     const content = await readFile(mapperPath, 'utf8');
     const mapper = JSON.parse(content) as IMapper[];
 
@@ -66,6 +71,7 @@ function masterMain(config: IMasterConfig) {
 
     // health check
     app.get('/health', async (request) => {
+      const start = Date.now();
       const keys = uniq(mapper.map((m) => m.queue));
       const result = await Promise.all(
         keys.map<Promise<IResult>>(async (key) => {
@@ -86,6 +92,7 @@ function masterMain(config: IMasterConfig) {
               message:
                 result.message ||
                 (httpStatus[`${result.statusCode}_NAME`] as string),
+              elapsed: Date.now() - start,
               result: { queue: key },
             };
           } catch (e) {
@@ -94,6 +101,7 @@ function masterMain(config: IMasterConfig) {
               message:
                 e.message ||
                 (httpStatus[`${result.statusCode}_NAME`] as string),
+              elapsed: Date.now() - start,
               result: { queue: key },
             };
           }
@@ -105,6 +113,7 @@ function masterMain(config: IMasterConfig) {
           ? httpStatus.SERVICE_UNAVAILABLE
           : httpStatus.OK,
         message: unavailable ? httpStatus['500_NAME'] : httpStatus['200_NAME'],
+        elapsed: Date.now() - start,
         result,
       };
     });
@@ -112,6 +121,7 @@ function masterMain(config: IMasterConfig) {
     // RESTful api call
     app.all('*', async (request, reply) => {
       let job: Job<IRequest>;
+      const start = Date.now();
       try {
         const url = new URL(request.url, `http://localhost:${port}`);
         for (const { path, before = [], after = [], queue: key } of mapper) {
@@ -159,7 +169,10 @@ function masterMain(config: IMasterConfig) {
                 `${result.statusCode}_NAME`
               ] as string;
             }
-            return result;
+            return {
+              ...result,
+              elapsed: Date.now() - start,
+            };
           }
         }
         throw new NotFound('Page Not Found');
@@ -167,6 +180,7 @@ function masterMain(config: IMasterConfig) {
         return {
           statusCode: e.statusCode || 500,
           message: e.message,
+          elapsed: Date.now() - start,
         };
       }
     });
@@ -236,7 +250,7 @@ function workerMain(config: IWorkerConfig) {
 
 async function main() {
   const content = await readFile(
-    resolve('configs', `config.${NODE_ENV}.yaml`),
+    resolve(base ? 'templates' : 'configs', `config.${NODE_ENV}.yaml`),
     'utf8',
   );
   const config = yaml.load(content) as IConfig;

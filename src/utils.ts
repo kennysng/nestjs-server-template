@@ -50,7 +50,6 @@ export function wait<T, R = any>(
   job: Job<T>,
   timeout: number,
 ): Promise<IResult<R>> {
-  const start = Date.now();
   return new Promise<IResult>((resolve, reject) => {
     const timer = setTimeout(async () => {
       queue.removeJob(job.id);
@@ -58,7 +57,7 @@ export function wait<T, R = any>(
     }, timeout);
     job.on('succeeded', (result: IResult) => {
       clearTimeout(timer);
-      resolve({ ...result, elapsed: Date.now() - start });
+      resolve(result);
     });
     job.on('failed', (e) =>
       reject(httpErrors[e.message] ? new httpErrors[e.message]() : e),
