@@ -32,6 +32,7 @@ import logger from './logger';
 import * as middlewares_ from './middleware';
 import { connectQueue, logSection, wait } from './utils';
 import { connect as connectDB } from './sequelize';
+import httpStatus = require('http-status');
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
@@ -64,38 +65,37 @@ function masterMain(config: IMasterConfig) {
     // health check
     app.get('/health', async (request) => {
       const keys = uniq(mapper.map((m) => m.queue));
+      const result = await Promise.all(
+        keys.map<Promise<IResult>>(async (key) => {
+          let job: Job<IRequest>;
+          try {
+            const queue = connectQueue('server', key, redisConfig, request.log);
+            const data: IRequest = {
+              method: 'HEALTH',
+              url: '',
+              headers: request.headers,
+              query: {},
+              params: {},
+            };
+            job = await queue.createJob(data).save();
+            const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
+            return { ...result, result: { queue: key } };
+          } catch (e) {
+            return {
+              statusCode: e.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
+              message: e.message,
+              result: { queue: key },
+            };
+          }
+        }),
+      );
+      const unavailable = result.find((r) => r.statusCode !== httpStatus.OK);
       return {
-        statusCode: 200,
-        message: 'OK',
-        result: await Promise.all(
-          keys.map<Promise<IResult>>(async (key) => {
-            let job: Job<IRequest>;
-            try {
-              const queue = connectQueue(
-                'server',
-                key,
-                redisConfig,
-                request.log,
-              );
-              const data: IRequest = {
-                method: 'HEALTH',
-                url: '',
-                headers: request.headers,
-                query: {},
-                params: {},
-              };
-              job = await queue.createJob(data).save();
-              const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
-              return { ...result, result: { queue: key } };
-            } catch (e) {
-              return {
-                statusCode: e.statusCode || 500,
-                message: e.message,
-                result: { queue: key },
-              };
-            }
-          }),
-        ),
+        statusCode: unavailable
+          ? httpStatus.SERVICE_UNAVAILABLE
+          : httpStatus.OK,
+        message: unavailable ? httpStatus[500] : httpStatus[200],
+        result,
       };
     });
 
