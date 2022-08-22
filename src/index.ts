@@ -187,31 +187,32 @@ function workerMain(config: IWorkerConfig) {
     );
 
     Promise.all(
-      config.modules.map((key) =>
-        import(resolve(__dirname, 'queue', key)).then(
+      config.modules.map((key) => {
+        const queueLogger = logger(`Queue:${key}`);
+        return import(resolve(__dirname, 'queue', key)).then(
           async ({ default: module }) => {
             const queue = await connectQueue(
               'worker',
               key,
               redisConfig,
-              myLogger,
+              queueLogger,
             );
             const queueInst = new module(config, dependencies);
             return queue.process(
               (job: Job<IRequest>, done: DoneCallback<IResult>) => {
-                myLogger.info(job.data);
+                queueLogger.info(job.data);
                 queueInst
                   .run(job.data)
                   .then((result) => done(null, result))
                   .catch((e) => {
-                    myLogger.error(e, e.message);
+                    queueLogger.error(e, e.message);
                     done(e.statusCode ? new Error(e.statusCode) : e);
                   });
               },
             );
           },
-        ),
-      ),
+        );
+      }),
     );
   });
 }
