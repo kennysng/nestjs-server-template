@@ -45,7 +45,11 @@ export function connectQueue(
   return queue;
 }
 
-export function wait<T>(queue: Queue, job: Job<T>, timeout: number) {
+export function wait<T, R = any>(
+  queue: Queue,
+  job: Job<T>,
+  timeout: number,
+): Promise<IResult<R>> {
   const start = Date.now();
   return new Promise<IResult>((resolve, reject) => {
     const timer = setTimeout(async () => {
