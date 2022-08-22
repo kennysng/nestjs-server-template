@@ -4,7 +4,7 @@ import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
 import type { Job } from 'bee-queue';
 import httpErrors from 'http-errors';
-import Queue from 'bee-queue';
+import Queue = require('bee-queue');
 import { IResult } from './interface';
 
 type Result<T> = {

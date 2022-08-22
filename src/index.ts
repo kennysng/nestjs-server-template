@@ -8,7 +8,7 @@ import fastify from 'fastify';
 import { readFile } from 'fs/promises';
 import { InternalServerError, NotFound } from 'http-errors';
 import yaml = require('js-yaml');
-import uniq from 'lodash.uniq';
+import uniq = require('lodash.uniq');
 import minimist = require('minimist');
 import { match } from 'node-match-path';
 import { cpus } from 'os';
