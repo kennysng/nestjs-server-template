@@ -3,7 +3,7 @@ import type { Logger } from 'pino';
 import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
 import type { Job } from 'bee-queue';
-import httpErrors from 'http-errors';
+import * as httpErrors from 'http-errors';
 import Queue = require('bee-queue');
 import { IResult } from './interface';
 
@@ -54,7 +54,7 @@ export function wait<T, R = any>(
   return new Promise<IResult>((resolve, reject) => {
     const timer = setTimeout(async () => {
       queue.removeJob(job.id);
-      reject(new httpErrors.RequestTimeout());
+      reject(new httpErrors.GatewayTimeout());
     }, timeout);
     job.on('succeeded', (result: IResult) => {
       clearTimeout(timer);
