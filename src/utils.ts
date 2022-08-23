@@ -1,6 +1,12 @@
+import { FastifyBaseLogger, FastifyReply } from 'fastify';
 import type { Logger } from 'pino';
 import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
+import type { Job } from 'bee-queue';
+import * as httpErrors from 'http-errors';
+import Queue = require('bee-queue');
+import { ICache, IResult } from './interface';
+import { DateTime } from 'luxon';
 
 type Result<T> = {
   result?: T;
@@ -8,6 +14,83 @@ type Result<T> = {
   start: number;
   end: number;
 };
+
+const queues: Record<'server' | 'worker', Record<string, Queue>> = {
+  server: {},
+  worker: {},
+};
+
+// close queue connections
+process.on('beforeExit', () => {
+  Promise.allSettled([
+    ...Object.values(queues.server).map((q) => q.close()),
+    ...Object.values(queues.worker).map((q) => q.close()),
+  ]);
+});
+
+export function connectQueue(
+  type: 'server' | 'worker',
+  key: string,
+  redisConfig: any,
+  logger: FastifyBaseLogger,
+) {
+  let queue = queues[type][key];
+  if (!queue) {
+    queue = queues[type][key] = new Queue(key, {
+      isWorker: type === 'worker',
+      redis: redisConfig,
+    });
+    logger.info(`Queue '${key}' connecting ...`);
+    queue.on('ready', () => logger.info(`Queue '${key}' is ready`));
+  }
+  return queue;
+}
+
+export function wait<T, R = any>(
+  queue: Queue,
+  job: Job<T>,
+  timeout: number,
+): Promise<IResult<R>> {
+  return new Promise<IResult>((resolve, reject) => {
+    const timer = setTimeout(async () => {
+      queue.removeJob(job.id);
+      reject(new httpErrors.GatewayTimeout());
+    }, timeout);
+    job.on('succeeded', (result: IResult) => {
+      clearTimeout(timer);
+      resolve(result);
+    });
+    job.on('failed', (e) =>
+      reject(httpErrors[e.message] ? new httpErrors[e.message]() : e),
+    );
+  });
+}
+
+export function concat(source: string, segment: string, delimit = ', ') {
+  if (source) source += delimit;
+  return source + segment;
+}
+
+export function applyCache(
+  reply: FastifyReply,
+  { public: public_, maxAge, lastModified }: ICache,
+) {
+  let cache = '';
+  if (typeof public_ === 'boolean') {
+    cache += public_ ? 'public' : 'private';
+  }
+  if (typeof maxAge === 'number') {
+    cache = concat(
+      cache,
+      `${public_ === false ? 's-maxage' : 'max-age'}=${maxAge}`,
+    );
+    reply.header('expires', DateTime.local().plus({ second: maxAge }).toHTTP());
+  }
+  if (typeof lastModified === 'string') {
+    reply.header('last-modified', lastModified);
+  }
+  reply.header('cache-control', cache);
+}
 
 export function fixUrl(url: string) {
   if (!url.startsWith('/')) url = '/' + url;

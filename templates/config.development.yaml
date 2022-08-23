@@ -1,0 +1,26 @@
+port: 8080
+modules:
+  - default
+
+cache:
+  maxAge: 300
+
+auth:
+  access_token:
+    expires_in: 1h
+    secret: access_token_secret
+  refresh_token:
+    expires_in: 365d
+    secret: refresh_token_secret
+
+database:
+  host: localhost
+  port: 3306
+  username: username
+  password: password
+  rebuild: false
+  log: true
+
+redis:
+  host: localhost
+  port: 6379

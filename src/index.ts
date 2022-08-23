@@ -1,15 +1,12 @@
 import type { DoneCallback, Job } from 'bee-queue';
-import type { FastifyBaseLogger } from 'fastify';
 
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
 import { fastifyJwt } from '@fastify/jwt';
-import Queue = require('bee-queue');
 import * as _cluster from 'cluster';
 import fastify from 'fastify';
 import { readFile } from 'fs/promises';
-import { InternalServerError, NotFound, RequestTimeout } from 'http-errors';
-import httpErrors = require('http-errors');
+import { InternalServerError, NotFound } from 'http-errors';
 import yaml = require('js-yaml');
 import uniq = require('lodash.uniq');
 import minimist = require('minimist');
@@ -22,6 +19,8 @@ import daos from './dao';
 import { DaoHelper } from './dao/base';
 import {
   Dependencies,
+  HttpMethods,
+  IBodyRequest,
   IConfig,
   IMapper,
   IMasterConfig,
@@ -33,62 +32,28 @@ import {
 import { ServerType } from './interface';
 import logger from './logger';
 import * as middlewares_ from './middleware';
-import { logSection } from './utils';
+import { applyCache, connectQueue, logSection, wait } from './utils';
 import { connect as connectDB } from './sequelize';
+import httpStatus = require('http-status');
 
 const cluster = _cluster as unknown as _cluster.Cluster;
+
+const base = true;
 
 const argv = minimist(process.argv.slice(2));
 
 const NODE_ENV = (process.env.NODE_ENV =
   argv.env || argv.E || process.env.NODE_ENV || 'development');
 
-const queues: Record<'server' | 'worker', Record<string, Queue>> = {
-  server: {},
-  worker: {},
-};
-
-function connectQueue(
-  type: 'server' | 'worker',
-  key: string,
-  redisConfig: any,
-  logger: FastifyBaseLogger,
-) {
-  let queue = queues[type][key];
-  if (!queue) {
-    queue = queues[type][key] = new Queue(key, {
-      isWorker: type === 'worker',
-      redis: redisConfig,
-    });
-    logger.info(`Queue '${key}' connecting ...`);
-    queue.on('ready', () => logger.info(`Queue '${key}' is ready`));
-  }
-  return queue;
-}
-
-function wait<T>(queue: Queue, job: Job<T>, timeout: number) {
-  const start = Date.now();
-  return new Promise<IResult>((resolve, reject) => {
-    const timer = setTimeout(async () => {
-      queue.removeJob(job.id);
-      reject(new RequestTimeout());
-    }, timeout);
-    job.on('succeeded', (result: IResult) => {
-      clearTimeout(timer);
-      resolve({ ...result, elapsed: Date.now() - start });
-    });
-    job.on('failed', (e) =>
-      reject(httpErrors[e.message] ? new httpErrors[e.message]() : e),
-    );
-  });
-}
-
 function masterMain(config: IMasterConfig) {
   logSection('Initialize Server', logger('Server'), async () => {
     const port = config.port || 8080;
     const redisConfig = config.redis || {};
 
-    const mapperPath = resolve(__dirname, 'mapper.json');
+    const mapperPath = resolve(
+      __dirname,
+      base ? '../templates/mapper.json' : 'mapper.json',
+    );
     const content = await readFile(mapperPath, 'utf8');
     const mapper = JSON.parse(content) as IMapper[];
 
@@ -96,112 +61,160 @@ function masterMain(config: IMasterConfig) {
     app.register(helmet);
     app.register(compression);
 
+    // jwt
     if (!config.auth.access_token.secret) {
       throw new InternalServerError('Missing Secret for Access Token');
     }
-
     app.register(fastifyJwt, {
       secret: config.auth.access_token.secret,
     });
 
     // health check
-    app.get('/health', async (request) => {
+    app.get('/health', async (request, reply) => {
+      // no cache
+      reply.header('cache-control', 'no-cache, no-store');
+
+      const start = Date.now();
       const keys = uniq(mapper.map((m) => m.queue));
+      let statusCode = httpStatus.OK;
+      const result = await Promise.all(
+        keys.map<Promise<IResult>>(async (key) => {
+          let job: Job<IRequest>;
+          try {
+            const queue = connectQueue('server', key, redisConfig, request.log);
+            const data: IRequest = {
+              method: 'HEALTH',
+              url: '',
+              headers: request.headers,
+              query: {},
+              params: {},
+            };
+            job = await queue.createJob(data).save();
+            const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
+            return {
+              ...result,
+              message:
+                result.message ||
+                (httpStatus[`${result.statusCode}_NAME`] as string),
+              elapsed: Date.now() - start,
+              result: { queue: key },
+            };
+          } catch (e) {
+            return {
+              statusCode: e.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
+              message:
+                e.message ||
+                (httpStatus[`${result.statusCode}_NAME`] as string),
+              elapsed: Date.now() - start,
+              result: { queue: key },
+            };
+          }
+        }),
+      );
+      const unavailable = result.find((r) => r.statusCode !== httpStatus.OK);
+      if (unavailable) statusCode = httpStatus.SERVICE_UNAVAILABLE;
+      reply.status(statusCode);
       return {
-        statusCode: 200,
-        message: 'OK',
-        result: await Promise.all(
-          keys.map<Promise<IResult>>(async (key) => {
-            let job: Job<IRequest>;
-            try {
+        statusCode,
+        message: unavailable ? httpStatus['500_NAME'] : httpStatus['200_NAME'],
+        elapsed: Date.now() - start,
+        result,
+      };
+    });
+
+    // RESTful api call
+    app.all('*', async (request, reply) => {
+      // default cache
+      if (config.cache) applyCache(reply, config.cache);
+
+      let job: Job<IRequest>;
+      const start = Date.now();
+      try {
+        const url = new URL(request.url, `http://localhost:${port}`);
+        for (const {
+          method,
+          path,
+          before = [],
+          after = [],
+          queue: key,
+        } of mapper) {
+          const REQ_METHOD = request.method.toLocaleUpperCase();
+          const MAP_METHOD = method.toLocaleUpperCase();
+          if (REQ_METHOD === MAP_METHOD || 'ALL' === MAP_METHOD) {
+            const { matches } = match(path, url.pathname);
+            if (matches) {
               const queue = connectQueue(
                 'server',
                 key,
                 redisConfig,
                 request.log,
               );
-              const data: IRequest = {
-                method: 'HEALTH',
-                url: '',
+              let data: IRequest = {
+                method: REQ_METHOD as HttpMethods,
+                url: request.url,
                 headers: request.headers,
-                query: {},
-                params: {},
+                query: request.query,
+                params: request.params,
+                user: request.user as IUser,
               };
+              if (['POST', 'PUT', 'PATCH'].indexOf(REQ_METHOD) > -1) {
+                (data as IBodyRequest).body = request.body;
+              }
+              for (const middleware of before) {
+                data =
+                  (await middlewares_[middleware]({
+                    config,
+                    request,
+                    reply,
+                    jobData: data,
+                  })) || data;
+              }
               job = await queue.createJob(data).save();
-              const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
-              return { ...result, result: { queue: key } };
-            } catch (e) {
+              let result = await wait<IRequest>(
+                queue,
+                job,
+                config.timeout || 30 * 1000,
+              );
+              for (const middleware of after) {
+                result =
+                  (await middlewares_[middleware]({
+                    config,
+                    request,
+                    reply,
+                    jobData: data,
+                    result,
+                  })) || result;
+              }
+              if (!result.message) {
+                result.message = httpStatus[
+                  `${result.statusCode}_NAME`
+                ] as string;
+              }
+              reply.status(result.statusCode);
+
+              if (result.cache) {
+                applyCache(reply, result.cache);
+                delete result.cache;
+              }
+
               return {
-                statusCode: e.statusCode || 500,
-                message: e.message,
-                result: { queue: key },
+                ...result,
+                elapsed: Date.now() - start,
               };
             }
-          }),
-        ),
-      };
-    });
-
-    // RESTful api call
-    app.all('*', async (request, reply) => {
-      let job: Job<IRequest>;
-      try {
-        const url = new URL(request.url, `http://localhost:${port}`);
-        for (const { path, before = [], after = [], queue: key } of mapper) {
-          const { matches } = match(path, url.pathname);
-          if (matches) {
-            const queue = connectQueue('server', key, redisConfig, request.log);
-            let data = {
-              method: request.method,
-              url: request.url,
-              headers: request.headers,
-              query: request.query,
-              params: request.params,
-              body: request.body,
-              user: request.user as IUser,
-            };
-            for (const middleware of before) {
-              data =
-                (await middlewares_[middleware]({
-                  config,
-                  request,
-                  reply,
-                  jobData: data,
-                })) || data;
-            }
-            job = await queue.createJob(data).save();
-            let result = await wait<IRequest>(
-              queue,
-              job,
-              config.timeout || 30 * 1000,
-            );
-            for (const middleware of after) {
-              result =
-                (await middlewares_[middleware]({
-                  config,
-                  request,
-                  reply,
-                  jobData: data,
-                  result,
-                })) || result;
-            }
-            return result;
           }
         }
-        throw new NotFound('Page Not Found');
+        reply.status(httpStatus.NOT_FOUND);
+        throw new NotFound();
       } catch (e) {
+        const statusCode = e.statusCode || 500;
+        reply.status(statusCode);
         return {
-          statusCode: e.statusCode || 500,
+          statusCode,
           message: e.message,
+          elapsed: Date.now() - start,
         };
       }
-    });
-
-    process.on('beforeExit', () => {
-      Promise.allSettled([
-        ...Object.values(queues.server).map((q) => q.close()),
-        ...Object.values(queues.worker).map((q) => q.close()),
-      ]);
     });
 
     await app.listen({ host: '0.0.0.0', port });
@@ -237,38 +250,39 @@ function workerMain(config: IWorkerConfig) {
     );
 
     Promise.all(
-      config.modules.map((key) =>
-        import(resolve(__dirname, 'queue', key)).then(
+      config.modules.map((key) => {
+        const queueLogger = logger(`Queue:${key}`);
+        return import(resolve(__dirname, 'queue', key)).then(
           async ({ default: module }) => {
             const queue = await connectQueue(
               'worker',
               key,
               redisConfig,
-              myLogger,
+              queueLogger,
             );
             const queueInst = new module(config, dependencies);
             return queue.process(
               (job: Job<IRequest>, done: DoneCallback<IResult>) => {
-                myLogger.info(job.data);
+                queueLogger.info(job.data);
                 queueInst
                   .run(job.data)
                   .then((result) => done(null, result))
                   .catch((e) => {
-                    myLogger.error(e, e.message);
+                    queueLogger.error(e, e.message);
                     done(e.statusCode ? new Error(e.statusCode) : e);
                   });
               },
             );
           },
-        ),
-      ),
+        );
+      }),
     );
   });
 }
 
 async function main() {
   const content = await readFile(
-    resolve('configs', `config.${NODE_ENV}.yaml`),
+    resolve(base ? 'templates' : 'configs', `config.${NODE_ENV}.yaml`),
     'utf8',
   );
   const config = yaml.load(content) as IConfig;
@@ -283,18 +297,15 @@ async function main() {
 
   let serverType: ServerType;
   switch (true) {
-    case 'port' in config && 'modules' in config: {
+    case 'port' in config && 'modules' in config:
       serverType = ServerType.HYBRID;
       break;
-    }
-    case 'port' in config: {
+    case 'port' in config:
       serverType = ServerType.MASTER;
       break;
-    }
-    case 'modules' in config: {
+    case 'modules' in config:
       serverType = ServerType.WORKER;
       break;
-    }
   }
 
   if (!clusters) {

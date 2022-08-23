@@ -1,0 +1,7 @@
+[
+  {
+    "method": "ALL",
+    "path": "/*",
+    "queue": "default"
+  }
+]
