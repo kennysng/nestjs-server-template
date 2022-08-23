@@ -23,7 +23,6 @@ if (order.indexOf('<THIRD_PARTY_MODULES>') === -1) {
 }
 
 async function fix(path: string): Promise<void> {
-  console.log('test', path)
   const stat = await lstat(path);
   if (stat.isDirectory()) {
     const files = await readdir(path);
