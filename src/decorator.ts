@@ -106,9 +106,6 @@ export function LastModified(getFunc: GetLastModified) {
         const source = DateTime.fromHTTP(
           data.headers['if-modified-since'] as string,
         );
-        console.log('target', target.toMillis());
-        console.log('source', source.toMillis());
-        console.log('result', target > source);
         if (target <= source) {
           return { statusCode: httpStatus.NOT_MODIFIED };
         }
