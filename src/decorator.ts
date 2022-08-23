@@ -145,7 +145,7 @@ export function Cache(options: ICache) {
     const func = descriptor.value!;
     descriptor.value = async (data: IRequest<any>) => {
       const result: IResult<any> = await func.apply(this, [data]);
-      Object.assign(result.cache, options);
+      result.cache = Object.assign(result.cache || {}, options);
       return result;
     };
   };
