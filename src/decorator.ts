@@ -85,17 +85,17 @@ export function LastModified(getFunc: GetLastModified) {
   ) {
     const func = descriptor.value!;
     descriptor.value = async (data: IRequest<any>) => {
-      let target: DateTime;
-      const value: Date | string | number = await getFunc.apply(this, [data]);
+      let current: DateTime;
+      const value: Date | string | number = await getFunc.apply(target, [data]);
       switch (typeof value) {
         case 'string':
-          target = DateTime.fromHTTP(DateTime.fromISO(value).toHTTP());
+          current = DateTime.fromHTTP(DateTime.fromISO(value).toHTTP());
           break;
         case 'number':
-          target = DateTime.fromHTTP(DateTime.fromMillis(value).toHTTP());
+          current = DateTime.fromHTTP(DateTime.fromMillis(value).toHTTP());
           break;
         default:
-          target = DateTime.fromHTTP(DateTime.fromJSDate(value).toHTTP());
+          current = DateTime.fromHTTP(DateTime.fromJSDate(value).toHTTP());
           break;
       }
 
@@ -103,7 +103,7 @@ export function LastModified(getFunc: GetLastModified) {
         const source = DateTime.fromHTTP(
           data.headers['if-modified-since'] as string,
         );
-        if (target <= source) {
+        if (current <= source) {
           return { statusCode: httpStatus.NOT_MODIFIED };
         }
       }
