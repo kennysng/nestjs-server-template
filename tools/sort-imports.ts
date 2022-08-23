@@ -1,4 +1,4 @@
-import { promises } from 'fs';
+import { lstatSync, promises } from 'fs';
 import minimist = require('minimist');
 import { resolve } from 'path';
 import { IImport, parse, sort, stringify } from './libs';
@@ -23,11 +23,15 @@ if (order.indexOf('<THIRD_PARTY_MODULES>') === -1) {
 }
 
 async function fix(path: string): Promise<void> {
+  console.log('test', path)
   const stat = await lstat(path);
   if (stat.isDirectory()) {
     const files = await readdir(path);
     await Promise.all(
-      files.filter((f) => f.endsWith('.ts')).map((f) => fix(resolve(path, f))),
+      files
+        .map((f) => resolve(path, f))
+        .filter((f) => f.endsWith('.ts') || lstatSync(path).isDirectory())
+        .map(f => fix(f)),
     );
   } else if (stat.isFile()) {
     const content = await readFile(path, 'utf-8');
