@@ -91,7 +91,7 @@ function masterMain(config: IMasterConfig) {
               params: {},
             };
             job = await queue.createJob(data).save();
-            const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
+            const result = await wait(queue, job, 3 * 1000); // healthy server can return within 3 seconds
             return {
               ...result,
               result: undefined,

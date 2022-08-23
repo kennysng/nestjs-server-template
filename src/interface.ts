@@ -149,6 +149,7 @@ export interface IError<T = any> extends IBaseResponse {
   error: string;
   extra?: T;
 }
+
 export interface IMiddlewareArgs {
   config: IMasterConfig;
   request: FastifyRequest;
