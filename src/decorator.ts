@@ -22,7 +22,10 @@ type GetLastModified = (data: IRequest<any>) =>
 
 const paths: Record<
   string,
-  Record<string, Array<[CheckFunc<boolean>, PathFunction]>>
+  Record<
+    string,
+    Array<[CheckFunc<boolean>, TypedPropertyDescriptor<PathFunction>]>
+  >
 > = {};
 
 export function BodyValidate(field: string, name?: string) {
@@ -170,18 +173,7 @@ export function Path(method: string, url: string | CheckFunc<boolean> = '') {
     }
     paths[target.constructor.name][METHOD].push([
       url as CheckFunc<boolean>,
-      METHOD !== 'HEALTH'
-        ? func
-        /* eslint-disable */
-        : async (data) => {
-          const result = await func(data);
-          Object.assign(result.cache, {
-            noCache: true,
-            noStore: true,
-          });
-          return result;
-        },
-      /* eslint-enable */
+      descriptor,
     ]);
   };
 }
@@ -210,7 +202,7 @@ export function Queue<T extends { new(...args: any[]): any }>(baseUrl = '') {
       async run(data: IRequest<any>) {
         const target = this.find(data) || this.find({ ...data, method: 'ALL' });
         if (!target) throw new NotFound();
-        return await target[1].apply(this, [data]);
+        return await target[1].value!.apply(this, [data]);
       }
     };
   };
