@@ -1,13 +1,15 @@
-import type { ICache, IRequest, IResult } from './interface';
+import type { IBodyRequest, ICache, IRequest, IResult } from './interface';
 
 import { Forbidden, NotFound } from 'http-errors';
 
-import { fixUrl } from './utils';
+import { fixUrl, Nullable, ValidationError } from './utils';
 import { match } from 'node-match-path';
 import { DateTime } from 'luxon';
 import httpStatus from 'http-status';
+import words = require('lodash.words');
+import capitalize = require('capitalize');
 
-type CheckData = (data: IRequest<any>) => boolean;
+type CheckFunc<T> = (data: IRequest<any>) => void | T;
 type PathFunction = (data: IRequest<any>) => IResult | Promise<IResult>;
 
 /* eslint-disable */
@@ -20,10 +22,26 @@ type GetLastModified = (data: IRequest<any>) =>
 
 const paths: Record<
   string,
-  Record<string, Array<[CheckData, PathFunction]>>
+  Record<string, Array<[CheckFunc<boolean>, PathFunction]>>
 > = {};
 
-export function Guard(...guardFuncs: CheckData[]) {
+export function BodyValidate(field: string, name?: string) {
+  return Validate(
+    ({ body }: IBodyRequest) =>
+      !body[field] &&
+      `Missing ${name || capitalize.words(words(field).join(' '))}`,
+  );
+}
+
+export function HeaderValidate(field: string, name?: string) {
+  return Validate(
+    ({ headers }) =>
+      !headers[field] &&
+      `Missing ${name || capitalize.words(words(field).join(' '))}`,
+  );
+}
+
+export function Validate(...funcs: CheckFunc<Nullable<string>>[]) {
   return function (
     target: any,
     propertyKey: string,
@@ -32,9 +50,28 @@ export function Guard(...guardFuncs: CheckData[]) {
   ) {
     const func = descriptor.value!;
     descriptor.value = async (data: IRequest<any>) => {
-      const result = guardFuncs.reduce((r, f) => r && f(data), true);
-      if (!result) throw new Forbidden();
+      const result: string[] = funcs.reduce((r, f) => {
+        const result = f(data);
+        return result ? [...r, result] : r;
+      }, []);
+      if (result.length) throw new ValidationError(result);
       return await func.apply(this, [data]);
+    };
+  };
+}
+
+export function Guard(...funcs: CheckFunc<boolean>[]) {
+  return function (
+    target: any,
+    propertyKey: string,
+    // eslint-disable-next-line
+    descriptor: TypedPropertyDescriptor<PathFunction>,
+  ) {
+    const func = descriptor.value!;
+    descriptor.value = async (data: IRequest<any>) => {
+      const result = funcs.reduce((r, f) => r && (f(data) || true), true);
+      if (!result) throw new Forbidden();
+      return (await func.apply(this, [data])) as IResult<any>;
     };
   };
 }
@@ -68,11 +105,31 @@ export function LastModified(getFunc: GetLastModified) {
         return { statusCode: httpStatus.NOT_MODIFIED };
       }
 
-      const result = await func.apply(this, [data]);
-      result.cache = { lastModified: target.toHTTP() };
+      const result: IResult<any> = await func.apply(this, [data]);
+      Object.assign(result.cache, { lastModified: target.toHTTP() });
       return result;
     };
   };
+}
+
+export function Public() {
+  return Cache({ private: false });
+}
+
+export function Private() {
+  return Cache({ private: true });
+}
+
+export function MaxAge(maxAge: number) {
+  return Cache({ maxAge });
+}
+
+export function NoCache() {
+  return Cache({ noCache: true });
+}
+
+export function NoStore() {
+  return Cache({ noStore: true });
 }
 
 export function Cache(options: ICache) {
@@ -84,13 +141,14 @@ export function Cache(options: ICache) {
   ) {
     const func = descriptor.value!;
     descriptor.value = async (data: IRequest<any>) => {
-      const result = await func.apply(this, [data]);
-      return { ...result, cache: options };
+      const result: IResult<any> = await func.apply(this, [data]);
+      Object.assign(result.cache, options);
+      return result;
     };
   };
 }
 
-export function Path(method: string, url: string | CheckData = '') {
+export function Path(method: string, url: string | CheckFunc<boolean> = '') {
   if (typeof url === 'string') {
     const url_ = url;
     url = ({ url: url__ }) => !!match(fixUrl(url_), fixUrl(url__));
@@ -110,7 +168,21 @@ export function Path(method: string, url: string | CheckData = '') {
     if (!paths[target.constructor.name][METHOD]) {
       paths[target.constructor.name][METHOD] = [];
     }
-    paths[target.constructor.name][METHOD].push([url as CheckData, func]);
+    paths[target.constructor.name][METHOD].push([
+      url as CheckFunc<boolean>,
+      METHOD !== 'HEALTH'
+        ? func
+        /* eslint-disable */
+        : async (data) => {
+          const result = await func(data);
+          Object.assign(result.cache, {
+            noCache: true,
+            noStore: true,
+          });
+          return result;
+        },
+      /* eslint-enable */
+    ]);
   };
 }
 

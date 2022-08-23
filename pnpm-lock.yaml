@@ -10,6 +10,7 @@ specifiers:
   '@types/js-yaml': ^4.0.5
   '@types/jsonwebtoken': ^8.5.8
   '@types/lodash.uniq': ^4.5.7
+  '@types/lodash.words': ^4.2.7
   '@types/luxon': ^3.0.0
   '@types/minimist': ^1.2.2
   '@types/node': ^17.0.45
@@ -34,6 +35,7 @@ specifiers:
   js-yaml: ^4.1.0
   jsonwebtoken: ^8.5.1
   lodash.uniq: ^4.5.0
+  lodash.words: ^4.2.0
   luxon: ^3.0.1
   mariadb: ^3.0.1
   minimist: ^1.2.6
@@ -66,6 +68,7 @@ dependencies:
   js-yaml: 4.1.0
   jsonwebtoken: 8.5.1
   lodash.uniq: 4.5.0
+  lodash.words: 4.2.0
   luxon: 3.0.1
   mariadb: 3.0.1
   node-match-path: 0.6.3
@@ -83,6 +86,7 @@ devDependencies:
   '@types/js-yaml': 4.0.5
   '@types/jsonwebtoken': 8.5.8
   '@types/lodash.uniq': 4.5.7
+  '@types/lodash.words': 4.2.7
   '@types/luxon': 3.0.0
   '@types/minimist': 1.2.2
   '@types/node': 17.0.45
@@ -969,6 +973,12 @@ packages:
 
   /@types/lodash.uniq/4.5.7:
     resolution: {integrity: sha512-qg7DeAbdZMi6DGvCxThlJycykLLhETrJrQZ6F2KaZ+o0sNK1qRHz46lgNA+nHHjwrmA2a91DyiZTp3ey3m1rEw==}
+    dependencies:
+      '@types/lodash': 4.14.182
+    dev: true
+
+  /@types/lodash.words/4.2.7:
+    resolution: {integrity: sha512-nQKFGx32VHqnNnjAZ3R23NEdOvvH2s6n5T7GGu//DGtN1NiDA2293htRDtifszLGdc2BJgK57SskX0o2AP+PYw==}
     dependencies:
       '@types/lodash': 4.14.182
     dev: true
@@ -3246,6 +3256,10 @@ packages:
 
   /lodash.uniq/4.5.0:
     resolution: {integrity: sha512-xfBaXQd9ryd9dlSDvnvI0lvxfLJlYAZzXomUYzLKtUeOQvOP5piqAWuGtrhWeqaXK9hhoM/iyJc5AV+XfsX3HQ==}
+    dev: false
+
+  /lodash.words/4.2.0:
+    resolution: {integrity: sha512-mXxqd8Yx9BGPij3lZKFSdOsjOTbL4krbCCp9slEozaN4EMppA2dFmK/f8HeohodprY6W0vOdiQ5WFgPaTI75xQ==}
     dev: false
 
   /lodash/4.17.21:

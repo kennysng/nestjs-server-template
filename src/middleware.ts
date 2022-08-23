@@ -5,10 +5,11 @@ import { Sequelize } from 'sequelize-typescript';
 import { connect } from './sequelize';
 import { sign } from 'jsonwebtoken';
 import { DaoHelper } from './dao/base';
+import { Nullable } from './utils';
 
 export const deviceTokenKey = 'x-device-token';
 
-let sequelize: Sequelize | undefined;
+let sequelize: Nullable<Sequelize>;
 
 // close DB connection
 process.on('beforeExit', () => sequelize?.close());

@@ -14,7 +14,7 @@ import type { Logger } from 'pino';
 import type { Model, Sequelize } from 'sequelize-typescript';
 
 import logger from '../logger';
-import { inTransaction, logSection } from '../utils';
+import { inTransaction, logSection, Nullable } from '../utils';
 
 // eslint-disable-next-line
 export type MyModel<T> = { new(): T } & typeof Model;
@@ -164,7 +164,7 @@ export class BaseDao<T extends Model, ID = number> extends EventEmitter {
   }
 
   public getPrimaryKey(instance: T) {
-    let id: ID | undefined = instance.id;
+    let id: Nullable<ID> = instance.id;
     if (!id) {
       id =
         (typeof instance.getDataValue === 'function' &&
@@ -504,6 +504,25 @@ export class BaseDao<T extends Model, ID = number> extends EventEmitter {
       );
 
       return this.findById(this.getPrimaryKey(instances), user, transaction);
+    }
+  }
+
+  /**
+   * update entity's updatedAt
+   * @param id whether string or number
+   * @param user IUser
+   * @param transaction sequelize.Transaction
+   */
+  async touch(id: ID, user?: IUser, transaction?: Transaction) {
+    if (!transaction) {
+      return this.inTransaction((transaction) =>
+        this.touch(id, user, transaction),
+      );
+    }
+    const entity = await this.findById(id);
+    if ('updatedAt' in entity) {
+      entity['updatedAt'] = new Date();
+      await this.update(entity, user, transaction);
     }
   }
 

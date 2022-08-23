@@ -52,7 +52,9 @@ interface ITokenOptions {
 }
 
 export interface ICache {
-  public?: boolean;
+  private?: boolean;
+  noCache?: boolean;
+  noStore?: boolean;
   maxAge?: number;
   lastModified?: string;
 }

@@ -3,17 +3,11 @@ import type { Logger } from 'pino';
 import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
 import type { Job } from 'bee-queue';
+import { BadRequest } from 'http-errors';
 import * as httpErrors from 'http-errors';
 import Queue = require('bee-queue');
 import { ICache, IResult } from './interface';
 import { DateTime } from 'luxon';
-
-type Result<T> = {
-  result?: T;
-  error?: any;
-  start: number;
-  end: number;
-};
 
 const queues: Record<'server' | 'worker', Record<string, Queue>> = {
   server: {},
@@ -27,6 +21,15 @@ process.on('beforeExit', () => {
     ...Object.values(queues.worker).map((q) => q.close()),
   ]);
 });
+
+type Result<T> = {
+  result?: T;
+  error?: any;
+  start: number;
+  end: number;
+};
+
+export type Nullable<T, N = undefined> = T | N;
 
 export function connectQueue(
   type: 'server' | 'worker',
@@ -73,16 +76,22 @@ export function concat(source: string, segment: string, delimit = ', ') {
 
 export function applyCache(
   reply: FastifyReply,
-  { public: public_, maxAge, lastModified }: ICache,
+  { private: private_, noCache, noStore, maxAge, lastModified }: ICache,
 ) {
   let cache = '';
-  if (typeof public_ === 'boolean') {
-    cache += public_ ? 'public' : 'private';
+  if (typeof private_ === 'boolean') {
+    cache = concat(cache, private_ ? 'private' : 'public');
+  }
+  if (noCache) {
+    cache = concat(cache, 'no-cache');
+  }
+  if (noStore) {
+    cache = concat(cache, 'no-store');
   }
   if (typeof maxAge === 'number') {
     cache = concat(
       cache,
-      `${public_ === false ? 's-maxage' : 'max-age'}=${maxAge}`,
+      `${private_ === false ? 's-maxage' : 'max-age'}=${maxAge}`,
     );
     reply.header('expires', DateTime.local().plus({ second: maxAge }).toHTTP());
   }
@@ -143,5 +152,11 @@ export async function inTransaction<T>(
     throw e;
   } finally {
     if (!withTransaction && !rollback) await transaction.commit();
+  }
+}
+
+export class ValidationError extends BadRequest {
+  constructor(public readonly errors: string[] = []) {
+    super('Validation Error');
   }
 }
