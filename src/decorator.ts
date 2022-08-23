@@ -22,10 +22,7 @@ type GetLastModified = (data: IRequest<any>) =>
 
 const paths: Record<
   string,
-  Record<
-    string,
-    Array<[CheckFunc<boolean>, TypedPropertyDescriptor<PathFunction>]>
-  >
+  Record<string, Array<[CheckFunc<boolean>, string]>>
 > = {};
 
 export function BodyValidate(field: string, name?: string) {
@@ -160,19 +157,13 @@ export function Cache(options: ICache) {
   };
 }
 
-export function Path(method: string, url: string | CheckFunc<boolean> = '') {
+export function Path(method: string, url: string | CheckFunc<boolean> = '*') {
   if (typeof url === 'string') {
     const url_ = url;
-    url = ({ url: url__ }) => !!match(fixUrl(url_), fixUrl(url__));
+    url = ({ url: url__ }) => match(fixUrl(url_), fixUrl(url__)).matches;
   }
-  return function (
-    target: any,
-    propertyKey: string,
+  return function (target: any, propertyKey: string) {
     // eslint-disable-next-line
-    descriptor: TypedPropertyDescriptor<PathFunction>,
-  ) {
-    // eslint-disable-next-line
-    const func = descriptor.value!;
     if (!paths[target.constructor.name]) {
       paths[target.constructor.name] = {};
     }
@@ -182,7 +173,7 @@ export function Path(method: string, url: string | CheckFunc<boolean> = '') {
     }
     paths[target.constructor.name][METHOD].push([
       url as CheckFunc<boolean>,
-      descriptor,
+      propertyKey,
     ]);
   };
 }
