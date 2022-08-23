@@ -1,4 +1,4 @@
-import type { IBodyRequest, ICache, IRequest, IResult } from './interface';
+import type { IBodyRequest, ICache, IRequest, IResponse } from './interface';
 
 import { Forbidden, NotFound } from 'http-errors';
 
@@ -10,7 +10,7 @@ import words = require('lodash.words');
 import capitalize = require('capitalize');
 
 type CheckFunc<T> = (data: IRequest<any>) => void | T;
-type PathFunction = (data: IRequest<any>) => IResult | Promise<IResult>;
+type PathFunction = (data: IRequest<any>) => IResponse | Promise<IResponse>;
 
 /* eslint-disable */
 type GetLastModified = (data: IRequest<any>) =>
@@ -53,12 +53,12 @@ export function Validate(...funcs: CheckFunc<Nullable<string>>[]) {
   ) {
     const func = descriptor.value!;
     descriptor.value = async (data: IRequest<any>) => {
-      const result: string[] = funcs.reduce((r, f) => {
+      const messages: string[] = funcs.reduce((r, f) => {
         const result = f(data);
         return result ? [...r, result] : r;
       }, []);
-      if (result.length) throw new ValidationError(result);
-      return await func.apply(this, [data]);
+      if (messages.length) throw new ValidationError(messages);
+      return await func.apply(target, [data]);
     };
   };
 }
@@ -74,7 +74,7 @@ export function Guard(...funcs: CheckFunc<boolean>[]) {
     descriptor.value = async (data: IRequest<any>) => {
       const result = funcs.reduce((r, f) => r && (f(data) || true), true);
       if (!result) throw new Forbidden();
-      return (await func.apply(this, [data])) as IResult<any>;
+      return (await func.apply(target, [data])) as IResponse<any>;
     };
   };
 }
@@ -111,10 +111,12 @@ export function LastModified(getFunc: GetLastModified) {
         }
       }
 
-      const result: IResult<any> = await func.apply(this, [data]);
-      result.cache = Object.assign(result.cache || {}, {
-        lastModified: target.toHTTP(),
-      });
+      const result: IResponse<any> = await func.apply(target, [data]);
+      if ('result' in result) {
+        result.cache = Object.assign(result.cache || {}, {
+          lastModified: current.toHTTP(),
+        });
+      }
       return result;
     };
   };
@@ -149,8 +151,10 @@ export function Cache(options: ICache) {
   ) {
     const func = descriptor.value!;
     descriptor.value = async (data: IRequest<any>) => {
-      const result: IResult<any> = await func.apply(this, [data]);
-      result.cache = Object.assign(result.cache || {}, options);
+      const result: IResponse<any> = await func.apply(target, [data]);
+      if ('result' in result) {
+        result.cache = Object.assign(result.cache || {}, options);
+      }
       return result;
     };
   };
@@ -204,10 +208,20 @@ export function Queue<T extends { new(...args: any[]): any }>(baseUrl = '') {
         );
       }
 
-      async run(data: IRequest<any>) {
-        const target = this.find(data) || this.find({ ...data, method: 'ALL' });
-        if (!target) throw new NotFound();
-        return await target[1].value!.apply(this, [data]);
+      async run(data: IRequest<any>): Promise<IResponse> {
+        try {
+          const target =
+            this.find(data) || this.find({ ...data, method: 'ALL' });
+          if (!target) throw new NotFound();
+          return await this[target[1]].apply(this, [data]);
+        } catch (e) {
+          const statusCode = e.statusCode || httpStatus.INTERNAL_SERVER_ERROR;
+          return {
+            statusCode,
+            error: e.message || httpStatus[`${statusCode}_NAME`],
+            extra: e.extra,
+          };
+        }
       }
     };
   };

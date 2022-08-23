@@ -31,7 +31,7 @@ export async function authentication({ request }: IMiddlewareArgs) {
 }
 
 export async function signJwt({ config, reply, result }: IMiddlewareArgs) {
-  const payload = result.payload;
+  const payload = result.result;
   if (!payload) throw new InternalServerError('Invalid Jwt Payload');
   const { secret, expires_in } = config.auth.refresh_token;
   const access_token = await reply.jwtSign(payload);

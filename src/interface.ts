@@ -133,16 +133,22 @@ export type IRequest<B = any, Q = any, P = any> =
   | IBaseRequest<Q, P>
   | IBodyRequest<B, Q, P>;
 
-export interface IResult<T = any> {
+export type IResponse<T = any> = IResult<T> | IError<T>;
+
+interface IBaseResponse {
   statusCode: number;
-  error?: string;
-  message?: string;
-  result?: T;
   elapsed?: number;
-  payload?: IJwtPayload;
+}
+
+export interface IResult<T = any> extends IBaseResponse {
+  result?: T;
   cache?: ICache;
 }
 
+export interface IError<T = any> extends IBaseResponse {
+  error: string;
+  extra?: T;
+}
 export interface IMiddlewareArgs {
   config: IMasterConfig;
   request: FastifyRequest;

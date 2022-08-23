@@ -3,11 +3,12 @@ import type { Logger } from 'pino';
 import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
 import type { Job } from 'bee-queue';
-import { BadRequest } from 'http-errors';
+import { BadRequest, HttpError } from 'http-errors';
 import * as httpErrors from 'http-errors';
 import Queue = require('bee-queue');
-import { ICache, IResult } from './interface';
+import { ICache, IResponse } from './interface';
 import { DateTime } from 'luxon';
+import httpStatus = require('http-status');
 
 const queues: Record<'server' | 'worker', Record<string, Queue>> = {
   server: {},
@@ -28,6 +29,46 @@ type Result<T> = {
   start: number;
   end: number;
 };
+
+export class MyError extends Error {
+  constructor(private readonly error: HttpError, public readonly extra?: any) {
+    super(error.message);
+  }
+
+  get expose() {
+    return this.error.expose;
+  }
+
+  get headers() {
+    return this.error.headers;
+  }
+
+  get message() {
+    return this.error.message;
+  }
+
+  get name() {
+    return this.error.name;
+  }
+
+  get stack() {
+    return this.error.stack;
+  }
+
+  get status() {
+    return this.error.status;
+  }
+
+  get statusCode() {
+    return this.error.statusCode;
+  }
+}
+
+export class ValidationError extends MyError {
+  constructor(errors?: string[]) {
+    super(new BadRequest('Validation Error'), errors);
+  }
+}
 
 export type Nullable<T, N = undefined> = T | N;
 
@@ -53,19 +94,30 @@ export function wait<T, R = any>(
   queue: Queue,
   job: Job<T>,
   timeout: number,
-): Promise<IResult<R>> {
-  return new Promise<IResult>((resolve, reject) => {
+): Promise<IResponse<R>> {
+  return new Promise<IResponse>((resolve, reject) => {
     const timer = setTimeout(async () => {
       queue.removeJob(job.id);
       reject(new httpErrors.GatewayTimeout());
     }, timeout);
-    job.on('succeeded', (result: IResult) => {
+    job.on('succeeded', (result: IResponse) => {
       clearTimeout(timer);
-      resolve(result);
+      if ('error' in result) {
+        reject(
+          new MyError(
+            new httpErrors[result.statusCode](
+              /* eslint-disable */ result.error ||
+              (httpStatus[`${result.statusCode}_NAME`] as string), /* eslint-enable */
+
+            ),
+            result.extra,
+          ),
+        );
+      } else {
+        resolve(result);
+      }
     });
-    job.on('failed', (e) =>
-      reject(httpErrors[e.message] ? new httpErrors[e.message]() : e),
-    );
+    job.on('failed', (e) => reject(e));
   });
 }
 
@@ -152,11 +204,5 @@ export async function inTransaction<T>(
     throw e;
   } finally {
     if (!withTransaction && !rollback) await transaction.commit();
-  }
-}
-
-export class ValidationError extends BadRequest {
-  constructor(public readonly errors: string[] = []) {
-    super('Validation Error');
   }
 }

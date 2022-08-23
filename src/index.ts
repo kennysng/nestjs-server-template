@@ -25,6 +25,7 @@ import {
   IMapper,
   IMasterConfig,
   IRequest,
+  IResponse,
   IResult,
   IUser,
   IWorkerConfig,
@@ -63,14 +64,14 @@ function masterMain(config: IMasterConfig) {
 
     // jwt
     if (!config.auth.access_token.secret) {
-      throw new InternalServerError('Missing Secret for Access Token');
+      throw new InternalServerError('Missing Access Token Secret');
     }
     app.register(fastifyJwt, {
       secret: config.auth.access_token.secret,
     });
 
     // health check
-    app.get('/health', async (request, reply) => {
+    app.get('/health', async (request, reply): Promise<IResponse> => {
       // no cache
       reply.header('cache-control', 'no-cache, no-store');
 
@@ -78,7 +79,7 @@ function masterMain(config: IMasterConfig) {
       const keys = uniq(mapper.map((m) => m.queue));
       let statusCode = httpStatus.OK;
       const result = await Promise.all(
-        keys.map<Promise<IResult>>(async (key) => {
+        keys.map<Promise<IResponse>>(async (key) => {
           let job: Job<IRequest>;
           try {
             const queue = connectQueue('server', key, redisConfig, request.log);
@@ -93,20 +94,16 @@ function masterMain(config: IMasterConfig) {
             const result = await wait(queue, job, 10 * 1000); // timeout if cannot return within 10s
             return {
               ...result,
-              message:
-                result.message ||
-                (httpStatus[`${result.statusCode}_NAME`] as string),
+              result: undefined,
+              queue: key,
               elapsed: Date.now() - start,
-              result: { queue: key },
             };
           } catch (e) {
             return {
               statusCode: e.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-              message:
-                e.message ||
-                (httpStatus[`${result.statusCode}_NAME`] as string),
+              error: e.message,
+              queue: key,
               elapsed: Date.now() - start,
-              result: { queue: key },
             };
           }
         }),
@@ -114,16 +111,22 @@ function masterMain(config: IMasterConfig) {
       const unavailable = result.find((r) => r.statusCode !== httpStatus.OK);
       if (unavailable) statusCode = httpStatus.SERVICE_UNAVAILABLE;
       reply.status(statusCode);
-      return {
-        statusCode,
-        message: unavailable ? httpStatus['500_NAME'] : httpStatus['200_NAME'],
-        elapsed: Date.now() - start,
-        result,
-      };
+      return unavailable
+        ? /* eslint-disable */ {
+          statusCode,
+          error: httpStatus['500_NAME'],
+          elapsed: Date.now() - start,
+        }
+        : {
+          statusCode,
+          result,
+          elapsed: Date.now() - start,
+        }; /* eslint-enable */
+
     });
 
     // RESTful api call
-    app.all('*', async (request, reply) => {
+    app.all('*', async (request, reply): Promise<IResponse> => {
       // default cache
       if (config.cache) applyCache(reply, config.cache);
 
@@ -185,14 +188,9 @@ function masterMain(config: IMasterConfig) {
                     result,
                   })) || result;
               }
-              if (!result.message) {
-                result.message = httpStatus[
-                  `${result.statusCode}_NAME`
-                ] as string;
-              }
               reply.status(result.statusCode);
 
-              if (result.cache) {
+              if ('cache' in result) {
                 applyCache(reply, result.cache);
                 delete result.cache;
               }
@@ -207,11 +205,12 @@ function masterMain(config: IMasterConfig) {
         reply.status(httpStatus.NOT_FOUND);
         throw new NotFound();
       } catch (e) {
-        const statusCode = e.statusCode || 500;
+        const statusCode = e.statusCode || httpStatus.INTERNAL_SERVER_ERROR;
         reply.status(statusCode);
         return {
           statusCode,
-          message: e.message,
+          error: e.message,
+          extra: e.extra,
           elapsed: Date.now() - start,
         };
       }
