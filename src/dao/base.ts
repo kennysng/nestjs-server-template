@@ -1,17 +1,17 @@
 import type { IUser, Options } from '../interface';
+import type { Logger } from 'pino';
 import type {
   FindOptions,
   Includeable,
   Transaction,
   WhereOptions,
 } from 'sequelize';
+import type { Model, Sequelize } from 'sequelize-typescript';
 
 import capitalize from 'capitalize';
 import deepmerge from 'deepmerge';
 import { EventEmitter } from 'events';
 import { InternalServerError, NotFound } from 'http-errors';
-import type { Logger } from 'pino';
-import type { Model, Sequelize } from 'sequelize-typescript';
 
 import logger from '../logger';
 import { inTransaction, logSection, Nullable } from '../utils';

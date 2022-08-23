@@ -7,6 +7,7 @@ import * as _cluster from 'cluster';
 import fastify from 'fastify';
 import { readFile } from 'fs/promises';
 import { InternalServerError, NotFound } from 'http-errors';
+import httpStatus = require('http-status');
 import yaml = require('js-yaml');
 import uniq = require('lodash.uniq');
 import minimist = require('minimist');
@@ -33,9 +34,8 @@ import {
 import { ServerType } from './interface';
 import logger from './logger';
 import * as middlewares_ from './middleware';
-import { applyCache, connectQueue, logSection, wait } from './utils';
 import { connect as connectDB } from './sequelize';
-import httpStatus = require('http-status');
+import { applyCache, connectQueue, logSection, wait } from './utils';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 

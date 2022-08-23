@@ -1,14 +1,16 @@
-import { FastifyBaseLogger, FastifyReply } from 'fastify';
+import type { Job } from 'bee-queue';
 import type { Logger } from 'pino';
 import type { Transaction } from 'sequelize';
 import type { Sequelize } from 'sequelize-typescript';
-import type { Job } from 'bee-queue';
+
+import Queue = require('bee-queue');
+import { FastifyBaseLogger, FastifyReply } from 'fastify';
 import { BadRequest, HttpError } from 'http-errors';
 import * as httpErrors from 'http-errors';
-import Queue = require('bee-queue');
-import { ICache, IResponse } from './interface';
-import { DateTime } from 'luxon';
 import httpStatus = require('http-status');
+import { DateTime } from 'luxon';
+
+import { ICache, IResponse } from './interface';
 
 const queues: Record<'server' | 'worker', Record<string, Queue>> = {
   server: {},

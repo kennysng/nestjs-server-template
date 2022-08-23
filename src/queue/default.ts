@@ -1,5 +1,6 @@
 import httpStatus = require('http-status');
-import { Queue, Path, LastModified, HeaderValidate } from '../decorator';
+
+import { HeaderValidate, LastModified, Path, Queue } from '../decorator';
 
 let date: Date;
 

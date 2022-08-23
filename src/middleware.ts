@@ -1,10 +1,11 @@
 import type { IMiddlewareArgs, IUser } from './interface';
 
 import { InternalServerError, Unauthorized } from 'http-errors';
-import { Sequelize } from 'sequelize-typescript';
-import { connect } from './sequelize';
 import { sign } from 'jsonwebtoken';
+import { Sequelize } from 'sequelize-typescript';
+
 import { DaoHelper } from './dao/base';
+import { connect } from './sequelize';
 import { Nullable } from './utils';
 
 export const deviceTokenKey = 'x-device-token';

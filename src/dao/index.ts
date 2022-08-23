@@ -1,6 +1,7 @@
-import { Sequelize } from 'sequelize-typescript';
 import type { Options } from '../interface';
 import type { BaseDao, DaoHelper, MyModel } from './base';
+
+import { Sequelize } from 'sequelize-typescript';
 
 export default [] as Array<
   [

@@ -1,13 +1,13 @@
 import type { IBodyRequest, ICache, IRequest, IResponse } from './interface';
 
+import capitalize = require('capitalize');
 import { Forbidden, NotFound } from 'http-errors';
-
-import { fixUrl, Nullable, ValidationError } from './utils';
-import { match } from 'node-match-path';
-import { DateTime } from 'luxon';
 import httpStatus = require('http-status');
 import words = require('lodash.words');
-import capitalize = require('capitalize');
+import { DateTime } from 'luxon';
+import { match } from 'node-match-path';
+
+import { fixUrl, Nullable, ValidationError } from './utils';
 
 type CheckFunc<T> = (data: IRequest<any>) => void | T;
 type PathFunction = (data: IRequest<any>) => IResponse | Promise<IResponse>;

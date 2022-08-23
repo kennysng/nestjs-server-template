@@ -1,5 +1,6 @@
 import { resolve } from 'path';
 import { Sequelize } from 'sequelize-typescript';
+
 import { IBaseConfig } from './interface';
 import logger from './logger';
 import { logSection } from './utils';
