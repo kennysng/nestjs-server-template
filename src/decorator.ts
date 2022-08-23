@@ -5,7 +5,7 @@ import { Forbidden, NotFound } from 'http-errors';
 import { fixUrl, Nullable, ValidationError } from './utils';
 import { match } from 'node-match-path';
 import { DateTime } from 'luxon';
-import httpStatus from 'http-status';
+import httpStatus = require('http-status');
 import words = require('lodash.words');
 import capitalize = require('capitalize');
 
@@ -88,28 +88,36 @@ export function LastModified(getFunc: GetLastModified) {
   ) {
     const func = descriptor.value!;
     descriptor.value = async (data: IRequest<any>) => {
-      const source = DateTime.fromHTTP(
-        data.headers['if-modified-since'] as string,
-      );
       let target: DateTime;
       const value: Date | string | number = await getFunc.apply(this, [data]);
       switch (typeof value) {
         case 'string':
-          target = DateTime.fromISO(value);
+          target = DateTime.fromHTTP(DateTime.fromISO(value).toHTTP());
           break;
         case 'number':
-          target = DateTime.fromMillis(value);
+          target = DateTime.fromHTTP(DateTime.fromMillis(value).toHTTP());
           break;
         default:
-          target = DateTime.fromJSDate(value);
+          target = DateTime.fromHTTP(DateTime.fromJSDate(value).toHTTP());
           break;
       }
-      if (target <= source) {
-        return { statusCode: httpStatus.NOT_MODIFIED };
+
+      if (data.headers['if-modified-since']) {
+        const source = DateTime.fromHTTP(
+          data.headers['if-modified-since'] as string,
+        );
+        console.log('target', target.toMillis());
+        console.log('source', source.toMillis());
+        console.log('result', target > source);
+        if (target <= source) {
+          return { statusCode: httpStatus.NOT_MODIFIED };
+        }
       }
 
       const result: IResult<any> = await func.apply(this, [data]);
-      Object.assign(result.cache, { lastModified: target.toHTTP() });
+      result.cache = Object.assign(result.cache || {}, {
+        lastModified: target.toHTTP(),
+      });
       return result;
     };
   };
