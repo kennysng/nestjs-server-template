@@ -88,9 +88,9 @@ export enum ServerType {
 export interface IMapper {
   method: HttpMethods;
   path: string;
-  request?: string[];
-  reply?: string[];
   queue: string;
+  pre?<T>(req: FastifyRequest, data: IRequest<T>);
+  post?<T>(req: FastifyRequest, res: FastifyReply, result: IResult<T>);
 }
 
 export interface IJwtPayload {
@@ -152,14 +152,6 @@ export interface IResult<T = any> extends IBaseResponse {
 export interface IError<T = any> extends IBaseResponse {
   error: string;
   extra?: T;
-}
-
-export interface IMiddlewareArgs {
-  config: IMasterConfig;
-  request: FastifyRequest;
-  reply: FastifyReply;
-  jobData: IRequest;
-  result: IResult;
 }
 
 export type Options = {

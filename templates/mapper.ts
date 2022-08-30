@@ -1,4 +1,4 @@
-[
+export default [
   {
     "method": "ALL",
     "path": "/*",

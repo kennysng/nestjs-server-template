@@ -53,10 +53,9 @@ function masterMain(config: IMasterConfig) {
 
     const mapperPath = resolve(
       __dirname,
-      base ? '../templates/mapper.json' : 'mapper.json',
+      base ? '../templates/mapper.js' : 'mapper.js',
     );
-    const content = await readFile(mapperPath, 'utf8');
-    const mapper = JSON.parse(content) as IMapper[];
+    const mapper: IMapper[] = (await import(mapperPath)).default;
 
     const app = fastify({ logger: true });
 
@@ -153,13 +152,7 @@ function masterMain(config: IMasterConfig) {
       const start = Date.now();
       try {
         const url = new URL(request.url, `http://localhost:${port}`);
-        for (const {
-          method,
-          path,
-          request: before = [],
-          reply: after = [],
-          queue: key,
-        } of mapper) {
+        for (const { method, path, pre, post, queue: key } of mapper) {
           const REQ_METHOD = request.method.toLocaleUpperCase();
           const MAP_METHOD = method.toLocaleUpperCase();
           if (REQ_METHOD === MAP_METHOD || 'ALL' === MAP_METHOD) {
@@ -173,12 +166,7 @@ function masterMain(config: IMasterConfig) {
                 params: request.params,
               };
 
-              // pre-process
-              for (const key of before) {
-                if (typeof request[key] === 'function') {
-                  await request[key](data);
-                }
-              }
+              if (pre) await pre(request, data);
 
               const queue = connectQueue(
                 'server',
@@ -198,11 +186,7 @@ function masterMain(config: IMasterConfig) {
               reply.status(result.statusCode);
 
               // post-process
-              for (const key of after) {
-                if (typeof reply[key] === 'function') {
-                  await reply[key](result);
-                }
-              }
+              if (post) await post(request, reply, result);
 
               if ('cache' in result) {
                 applyCache(reply, result.cache);
