@@ -16,7 +16,6 @@
   "dependencies": {
     "@fastify/compress": "^6.1.0",
     "@fastify/helmet": "^9.1.0",
-    "@fastify/jwt": "^6.3.2",
     "@fastify/rate-limit": "^7.3.0",
     "bee-queue": "^1.4.0",
     "capitalize": "^2.0.4",
@@ -24,6 +23,7 @@
     "compression": "^1.7.4",
     "deepmerge": "^4.2.2",
     "fastify": "^4.4.0",
+    "fastify-plugin": "^4.2.1",
     "helmet": "^5.1.1",
     "http-errors": "^2.0.0",
     "http-status": "^1.5.2",

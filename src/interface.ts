@@ -1,4 +1,3 @@
-import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { Logger } from 'pino';
 import type { Includeable } from 'sequelize';
 
@@ -71,6 +70,7 @@ export interface IMasterConfig extends IBaseConfig {
     access_token: ITokenOptions;
     refresh_token: ITokenOptions;
   };
+  mapper: IMapper[];
 }
 
 export interface IWorkerConfig extends IBaseConfig {
@@ -89,8 +89,7 @@ export interface IMapper {
   method?: HttpMethods;
   path: string;
   queue: string;
-  pre?<T>(req: FastifyRequest, data: IRequest<T>);
-  post?<T>(req: FastifyRequest, res: FastifyReply, result: IResult<T>);
+  plugins?: string[];
 }
 
 export interface IJwtPayload {
@@ -149,8 +148,11 @@ export interface IResult<T = any> extends IBaseResponse {
   cache?: ICache;
 }
 
+export type IJwtResult = IResult<IUser>;
+
 export interface IError<T = any> extends IBaseResponse {
   error: string;
+  stack?: string;
   extra?: T;
 }
 

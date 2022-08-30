@@ -2,19 +2,15 @@ import type { DoneCallback, Job } from 'bee-queue';
 
 import compression from '@fastify/compress';
 import helmet from '@fastify/helmet';
-import { fastifyJwt } from '@fastify/jwt';
 import * as _cluster from 'cluster';
-import fastify from 'fastify';
+import fastify, { FastifyPluginCallback } from 'fastify';
 import { readFile } from 'fs/promises';
-import { InternalServerError, NotFound } from 'http-errors';
 import httpStatus = require('http-status');
 import yaml = require('js-yaml');
 import uniq = require('lodash.uniq');
 import minimist = require('minimist');
-import { match } from 'node-match-path';
 import { cpus } from 'os';
 import { resolve } from 'path';
-import { URL } from 'url';
 
 import daos from './dao';
 import { DaoHelper } from './dao/base';
@@ -23,7 +19,7 @@ import {
   HttpMethods,
   IBodyRequest,
   IConfig,
-  IMapper,
+  IError,
   IMasterConfig,
   IRequest,
   IResponse,
@@ -48,14 +44,9 @@ const NODE_ENV = (process.env.NODE_ENV =
 
 function masterMain(config: IMasterConfig) {
   logSection('Initialize Server', logger('Server'), async () => {
-    const port = config.port || 8080;
-    const redisConfig = config.redis || {};
-
-    const mapperPath = resolve(
-      __dirname,
-      base ? '../templates/mapper.js' : 'mapper.js',
-    );
-    const mapper: IMapper[] = (await import(mapperPath)).default;
+    const port = (config.port = config.port || 8080);
+    const redisConfig = (config.redis = config.redis || {});
+    const mapper = (config.mapper = config.mapper || []);
 
     const app = fastify({ logger: true });
 
@@ -76,54 +67,52 @@ function masterMain(config: IMasterConfig) {
       });
     }
 
-    // jwt plugin
-    if (!config.auth.access_token.secret) {
-      throw new InternalServerError('Missing Access Token Secret');
-    }
-    app.register(fastifyJwt, {
-      secret: config.auth.access_token.secret,
-    });
-
     // custom plugins
-    const plugins = await import('./plugin');
-    for (const key of Object.keys(plugins)) app.register(plugins[key], config);
+    const plugins: FastifyPluginCallback[] = (await import('./plugin')).default;
+    for (const plugin of plugins) app.register(plugin, config);
+
+    // error handling
+    app.setErrorHandler((e, req, res) => {
+      const statusCode = e.statusCode || httpStatus.INTERNAL_SERVER_ERROR;
+      const result: IError = {
+        statusCode,
+        error: e.message,
+        elapsed: Date.now() - req.start,
+        // extra: e.extra,
+      };
+      if (NODE_ENV === 'development') {
+        result.stack = e.stack;
+      }
+
+      res.status(statusCode);
+      res.send(result);
+    });
 
     // health check
     app.get('/health', async (request, reply): Promise<IResponse> => {
       // no cache
       reply.header('cache-control', 'no-cache, no-store');
 
-      const start = Date.now();
       const keys = uniq(mapper.map((m) => m.queue));
       let statusCode = httpStatus.OK;
       const result = await Promise.all(
         keys.map<Promise<IResponse>>(async (key) => {
-          let job: Job<IRequest>;
-          try {
-            const queue = connectQueue('server', key, redisConfig, request.log);
-            const data: IRequest = {
-              method: 'HEALTH',
-              url: '',
-              headers: request.headers,
-              query: {},
-              params: {},
-            };
-            job = await queue.createJob(data).save();
-            const result = await wait(queue, job, 3 * 1000); // healthy server can return within 3 seconds
-            return {
-              ...result,
-              result: undefined,
-              queue: key,
-              elapsed: Date.now() - start,
-            };
-          } catch (e) {
-            return {
-              statusCode: e.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
-              error: e.message,
-              queue: key,
-              elapsed: Date.now() - start,
-            };
-          }
+          const start = Date.now();
+          const queue = connectQueue('server', key, redisConfig, request.log);
+          const data: IRequest = {
+            method: 'HEALTH',
+            url: '*',
+            headers: request.headers,
+            query: {},
+            params: {},
+          };
+          const job: Job<IRequest> = await queue.createJob(data).save();
+          const result = await wait(queue, job, 3 * 1000); // healthy server can return within 3 seconds
+          return {
+            ...result,
+            queue: key,
+            elapsed: Date.now() - start,
+          };
         }),
       );
       const unavailable = result.find((r) => r.statusCode !== httpStatus.OK);
@@ -133,85 +122,50 @@ function masterMain(config: IMasterConfig) {
         ? /* eslint-disable */ {
           statusCode,
           error: httpStatus['500_NAME'],
-          elapsed: Date.now() - start,
         }
         : {
           statusCode,
           result,
-          elapsed: Date.now() - start,
         }; /* eslint-enable */
 
     });
 
     // RESTful api call
-    app.all('*', async (request, reply): Promise<IResponse> => {
+    app.all('*', async (req, res): Promise<IResponse> => {
       // default cache
-      if (config.cache) applyCache(reply, config.cache);
+      if (config.cache) applyCache(res, config.cache);
 
-      let job: Job<IRequest>;
-      const start = Date.now();
-      try {
-        const url = new URL(request.url, `http://localhost:${port}`);
-        for (const { method = 'ALL', path, pre, post, queue: key } of mapper) {
-          const REQ_METHOD = request.method.toLocaleUpperCase();
-          const MAP_METHOD = method.toLocaleUpperCase();
-          if (REQ_METHOD === MAP_METHOD || 'ALL' === MAP_METHOD) {
-            const { matches } = match(path, url.pathname);
-            if (matches) {
-              const data: IRequest = {
-                method: REQ_METHOD as HttpMethods,
-                url: request.url,
-                headers: request.headers,
-                query: request.query,
-                params: request.params,
-              };
+      const data: IRequest = {
+        method: req.method as HttpMethods,
+        url: req.url,
+        headers: req.headers,
+        query: req.query,
+        params: req.params,
+      };
 
-              if (pre) await pre(request, data);
-
-              const queue = connectQueue(
-                'server',
-                key,
-                redisConfig,
-                request.log,
-              );
-              if (['POST', 'PUT', 'PATCH'].indexOf(REQ_METHOD) > -1) {
-                (data as IBodyRequest).body = request.body;
-              }
-              job = await queue.createJob(data).save();
-              const result = await wait<IRequest>(
-                queue,
-                job,
-                config.timeout || 30 * 1000,
-              );
-              reply.status(result.statusCode);
-
-              // post-process
-              if (post) await post(request, reply, result);
-
-              if ('cache' in result) {
-                applyCache(reply, result.cache);
-                delete result.cache;
-              }
-
-              return {
-                ...result,
-                elapsed: Date.now() - start,
-              };
-            }
-          }
-        }
-        reply.status(httpStatus.NOT_FOUND);
-        throw new NotFound();
-      } catch (e) {
-        const statusCode = e.statusCode || httpStatus.INTERNAL_SERVER_ERROR;
-        reply.status(statusCode);
-        return {
-          statusCode,
-          error: e.message,
-          extra: e.extra,
-          elapsed: Date.now() - start,
-        };
+      const queue = connectQueue(
+        'server',
+        req.mapper.queue,
+        redisConfig,
+        req.log,
+      );
+      if (['POST', 'PUT', 'PATCH'].indexOf(req.method) > -1) {
+        (data as IBodyRequest).body = req.body;
       }
+      const job: Job<IRequest> = await queue.createJob(data).save();
+      const result = await wait<IRequest>(
+        queue,
+        job,
+        config.timeout || 30 * 1000,
+      );
+      res.status(result.statusCode);
+
+      if ('cache' in result) {
+        applyCache(res, result.cache);
+        delete result.cache;
+      }
+
+      return result;
     });
 
     await app.listen({ host: '0.0.0.0', port });

@@ -10,7 +10,16 @@ import * as httpErrors from 'http-errors';
 import httpStatus = require('http-status');
 import { DateTime } from 'luxon';
 
-import { ICache, IResponse } from './interface';
+import { ICache, IJwtPayload, IMapper, IResponse, IUser } from './interface';
+import { match } from 'node-match-path';
+import type { URL } from 'url';
+import {
+  Secret,
+  VerifyOptions,
+  verify as verify_,
+  sign as sign_,
+  SignOptions,
+} from 'jsonwebtoken';
 
 const queues: Record<'server' | 'worker', Record<string, Queue>> = {
   server: {},
@@ -126,6 +135,42 @@ export function wait<T, R = any>(
 export function concat(source: string, segment: string, delimit = ', ') {
   if (source) source += delimit;
   return source + segment;
+}
+
+export function verify(
+  token: string,
+  secretOrPublicKey: Secret,
+  options?: VerifyOptions,
+) {
+  return new Promise((resolve, reject) => {
+    verify_(token, secretOrPublicKey, options, (e, payload: IJwtPayload) => {
+      return e ? reject(e) : resolve(payload);
+    });
+  });
+}
+
+export function sign(
+  payload: IUser,
+  secretOrPrivateKey: Secret,
+  options?: SignOptions,
+) {
+  return new Promise((resolve, reject) => {
+    sign_(payload, secretOrPrivateKey, options, (e, token: string) => {
+      return e ? reject(e) : resolve(token);
+    });
+  });
+}
+
+export function matchUrl(method: string, url: URL, ...mappers: IMapper[]) {
+  for (const mapper of mappers) {
+    const { method: method_ = 'ALL', path } = mapper;
+    const REQ_METHOD = method.toLocaleUpperCase();
+    const MAP_METHOD = method_.toLocaleUpperCase();
+    if (REQ_METHOD === MAP_METHOD || 'ALL' === MAP_METHOD) {
+      const { matches } = match(path, url.pathname);
+      if (matches) return mapper;
+    }
+  }
 }
 
 export function applyCache(
