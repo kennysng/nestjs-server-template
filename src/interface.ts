@@ -63,6 +63,10 @@ export interface IMasterConfig extends IBaseConfig {
   port?: number;
   package?: string;
   cache?: ICache;
+  limit?: {
+    count: number;
+    window: number;
+  };
   auth: {
     access_token: ITokenOptions;
     refresh_token: ITokenOptions;

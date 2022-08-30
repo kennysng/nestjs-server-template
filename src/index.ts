@@ -36,6 +36,8 @@ import logger from './logger';
 import * as middlewares_ from './middleware';
 import { connect as connectDB } from './sequelize';
 import { applyCache, connectQueue, logSection, wait } from './utils';
+import RateLimit from '@fastify/rate-limit';
+import Redis from 'ioredis';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
@@ -59,10 +61,25 @@ function masterMain(config: IMasterConfig) {
     const mapper = JSON.parse(content) as IMapper[];
 
     const app = fastify({ logger: true });
+
     app.register(helmet);
     app.register(compression);
 
-    // jwt
+    // rate limit
+    if (config.limit) {
+      app.register(RateLimit, {
+        max: config.limit.count,
+        timeWindow: config.limit.window,
+        keyGenerator: (req) =>
+          (req.headers['x-real-ip'] as string) || // nginx
+          (req.headers['x-client-ip'] as string) || // apache
+          req.ip,
+        skipOnError: true,
+        redis: new Redis(redisConfig),
+      });
+    }
+
+    // jwt plugin
     if (!config.auth.access_token.secret) {
       throw new InternalServerError('Missing Access Token Secret');
     }
