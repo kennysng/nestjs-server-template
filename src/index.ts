@@ -152,7 +152,7 @@ function masterMain(config: IMasterConfig) {
       const start = Date.now();
       try {
         const url = new URL(request.url, `http://localhost:${port}`);
-        for (const { method, path, pre, post, queue: key } of mapper) {
+        for (const { method = 'ALL', path, pre, post, queue: key } of mapper) {
           const REQ_METHOD = request.method.toLocaleUpperCase();
           const MAP_METHOD = method.toLocaleUpperCase();
           if (REQ_METHOD === MAP_METHOD || 'ALL' === MAP_METHOD) {

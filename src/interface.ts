@@ -86,7 +86,7 @@ export enum ServerType {
 }
 
 export interface IMapper {
-  method: HttpMethods;
+  method?: HttpMethods;
   path: string;
   queue: string;
   pre?<T>(req: FastifyRequest, data: IRequest<T>);

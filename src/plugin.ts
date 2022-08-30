@@ -17,7 +17,11 @@ declare module 'fastify' {
     daoHelper?: DaoHelper;
   }
   interface FastifyRequest {
+    authenticate<T>(data: IRequest<T>);
     payload?: IUser;
+  }
+  interface FastifyReply {
+    signTokens<T>(result: IResult<T>);
   }
 }
 
