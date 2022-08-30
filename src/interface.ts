@@ -88,8 +88,8 @@ export enum ServerType {
 export interface IMapper {
   method: HttpMethods;
   path: string;
-  before?: string[];
-  after?: string[];
+  request?: string[];
+  reply?: string[];
   queue: string;
 }
 

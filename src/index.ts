@@ -28,12 +28,10 @@ import {
   IRequest,
   IResponse,
   IResult,
-  IUser,
   IWorkerConfig,
 } from './interface';
 import { ServerType } from './interface';
 import logger from './logger';
-import * as middlewares_ from './middleware';
 import { connect as connectDB } from './sequelize';
 import { applyCache, connectQueue, logSection, wait } from './utils';
 import RateLimit from '@fastify/rate-limit';
@@ -86,6 +84,10 @@ function masterMain(config: IMasterConfig) {
     app.register(fastifyJwt, {
       secret: config.auth.access_token.secret,
     });
+
+    // custom plugins
+    const plugins = await import('./plugin');
+    for (const key of Object.keys(plugins)) app.register(plugins[key], config);
 
     // health check
     app.get('/health', async (request, reply): Promise<IResponse> => {
@@ -154,8 +156,8 @@ function masterMain(config: IMasterConfig) {
         for (const {
           method,
           path,
-          before = [],
-          after = [],
+          request: before = [],
+          reply: after = [],
           queue: key,
         } of mapper) {
           const REQ_METHOD = request.method.toLocaleUpperCase();
@@ -163,49 +165,44 @@ function masterMain(config: IMasterConfig) {
           if (REQ_METHOD === MAP_METHOD || 'ALL' === MAP_METHOD) {
             const { matches } = match(path, url.pathname);
             if (matches) {
+              const data: IRequest = {
+                method: REQ_METHOD as HttpMethods,
+                url: request.url,
+                headers: request.headers,
+                query: request.query,
+                params: request.params,
+              };
+
+              // pre-process
+              for (const key of before) {
+                if (typeof request[key] === 'function') {
+                  await request[key](data);
+                }
+              }
+
               const queue = connectQueue(
                 'server',
                 key,
                 redisConfig,
                 request.log,
               );
-              let data: IRequest = {
-                method: REQ_METHOD as HttpMethods,
-                url: request.url,
-                headers: request.headers,
-                query: request.query,
-                params: request.params,
-                user: request.user as IUser,
-              };
               if (['POST', 'PUT', 'PATCH'].indexOf(REQ_METHOD) > -1) {
                 (data as IBodyRequest).body = request.body;
               }
-              for (const middleware of before) {
-                data =
-                  (await middlewares_[middleware]({
-                    config,
-                    request,
-                    reply,
-                    jobData: data,
-                  })) || data;
-              }
               job = await queue.createJob(data).save();
-              let result = await wait<IRequest>(
+              const result = await wait<IRequest>(
                 queue,
                 job,
                 config.timeout || 30 * 1000,
               );
-              for (const middleware of after) {
-                result =
-                  (await middlewares_[middleware]({
-                    config,
-                    request,
-                    reply,
-                    jobData: data,
-                    result,
-                  })) || result;
-              }
               reply.status(result.statusCode);
+
+              // post-process
+              for (const key of after) {
+                if (typeof reply[key] === 'function') {
+                  await reply[key](result);
+                }
+              }
 
               if ('cache' in result) {
                 applyCache(reply, result.cache);
