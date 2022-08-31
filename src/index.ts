@@ -47,9 +47,6 @@ function masterMain(config: IMasterConfig) {
 
     const app = (await import('fastify')).default({ logger: true });
 
-    // common utilities
-    app.register((await import('@fastify/sensible')).default);
-
     // secure headers
     app.register((await import('@fastify/helmet')).default);
     app.register((await import('@fastify/csrf-protection')).default);
