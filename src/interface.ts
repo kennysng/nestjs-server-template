@@ -65,6 +65,7 @@ export interface IMasterConfig extends IBaseConfig {
   limit?: {
     count: number;
     window: number;
+    perEndpoint: boolean;
   };
   auth: {
     access_token: ITokenOptions;

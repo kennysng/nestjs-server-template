@@ -32,6 +32,7 @@ import { connect as connectDB } from './sequelize';
 import { applyCache, connectQueue, logSection, wait } from './utils';
 import RateLimit from '@fastify/rate-limit';
 import Redis from 'ioredis';
+import { URL } from 'url';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
 
@@ -58,10 +59,14 @@ function masterMain(config: IMasterConfig) {
       app.register(RateLimit, {
         max: config.limit.count,
         timeWindow: config.limit.window,
-        keyGenerator: (req) =>
-          (req.headers['x-real-ip'] as string) || // nginx
-          (req.headers['x-client-ip'] as string) || // apache
-          req.ip,
+        keyGenerator: (req) => {
+          const url = new URL(req.url).pathname;
+          const ip =
+            (req.headers['x-real-ip'] as string) || // nginx
+            (req.headers['x-client-ip'] as string) || // apache
+            req.ip;
+          return config.limit.perEndpoint ? `${url}-${ip}` : ip;
+        },
         skipOnError: true,
         redis: new Redis(redisConfig),
       });
@@ -138,7 +143,7 @@ function masterMain(config: IMasterConfig) {
 
       const data: IRequest = {
         method: req.method as HttpMethods,
-        url: req.url,
+        url: new URL(req.url).pathname,
         headers: req.headers,
         query: req.query,
         params: req.params,
