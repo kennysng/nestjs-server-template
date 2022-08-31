@@ -1,9 +1,7 @@
 import type { DoneCallback, Job } from 'bee-queue';
 
-import compression from '@fastify/compress';
-import helmet from '@fastify/helmet';
 import * as _cluster from 'cluster';
-import fastify, { FastifyPluginCallback } from 'fastify';
+import type { FastifyPluginCallback } from 'fastify';
 import { readFile } from 'fs/promises';
 import httpStatus = require('http-status');
 import yaml = require('js-yaml');
@@ -30,8 +28,6 @@ import { ServerType } from './interface';
 import logger from './logger';
 import { connect as connectDB } from './sequelize';
 import { applyCache, connectQueue, logSection, wait } from './utils';
-import RateLimit from '@fastify/rate-limit';
-import Redis from 'ioredis';
 import { URL } from 'url';
 
 const cluster = _cluster as unknown as _cluster.Cluster;
@@ -49,14 +45,31 @@ function masterMain(config: IMasterConfig) {
     const redisConfig = (config.redis = config.redis || {});
     const mapper = (config.mapper = config.mapper || []);
 
-    const app = fastify({ logger: true });
+    const app = (await import('fastify')).default({ logger: true });
 
-    app.register(helmet);
-    app.register(compression);
+    // common utilities
+    app.register((await import('@fastify/sensible')).default);
+
+    // secure headers
+    app.register((await import('@fastify/helmet')).default);
+    app.register((await import('@fastify/csrf-protection')).default);
+
+    // gzip compression
+    app.register((await import('@fastify/compress')).default);
+
+    // parse accepts
+    app.register((await import('@fastify/accepts')).default);
+
+    // cookies
+    if (config.auth.cookie) {
+      app.register((await import('@fastify/cookie')).default, {
+        secret: config.auth.cookie.secret,
+      });
+    }
 
     // rate limit
     if (config.limit) {
-      app.register(RateLimit, {
+      app.register((await import('@fastify/rate-limit')).default, {
         max: config.limit.count,
         timeWindow: config.limit.window,
         keyGenerator: (req) => {
@@ -68,13 +81,16 @@ function masterMain(config: IMasterConfig) {
           return config.limit.perEndpoint ? `${url}-${ip}` : ip;
         },
         skipOnError: true,
-        redis: new Redis(redisConfig),
+        redis: new (await import('ioredis')).default(redisConfig),
       });
     }
 
     // custom plugins
     const plugins: FastifyPluginCallback[] = (await import('./plugin')).default;
     for (const plugin of plugins) app.register(plugin, config);
+
+    // generate etag
+    app.register((await import('@fastify/etag')).default);
 
     // error handling
     app.setErrorHandler((e, req, res) => {

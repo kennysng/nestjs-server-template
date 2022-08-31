@@ -2,6 +2,9 @@ lockfileVersion: 5.4
 
 specifiers:
   '@fastify/compress': ^6.1.0
+  '@fastify/cookie': ^8.1.0
+  '@fastify/csrf-protection': ^5.1.0
+  '@fastify/etag': ^4.1.0
   '@fastify/helmet': ^9.1.0
   '@fastify/rate-limit': ^7.3.0
   '@types/capitalize': ^2.0.0
@@ -57,6 +60,9 @@ specifiers:
 
 dependencies:
   '@fastify/compress': 6.1.0
+  '@fastify/cookie': 8.1.0
+  '@fastify/csrf-protection': 5.1.0
+  '@fastify/etag': 4.1.0
   '@fastify/helmet': 9.1.0
   '@fastify/rate-limit': 7.3.0
   bee-queue: 1.4.0
@@ -494,12 +500,37 @@ packages:
       pumpify: 2.0.1
     dev: false
 
+  /@fastify/cookie/8.1.0:
+    resolution: {integrity: sha512-+BxpyK4KLAjDpXdWxOjl8yaKtAoqYZR+CE9+cNtdMDoACb8hcpGx9npkrdINl62EpCu06oIPluq8A4NUsi78ZA==}
+    dependencies:
+      cookie: 0.5.0
+      fastify-plugin: 4.2.1
+    dev: false
+
+  /@fastify/csrf-protection/5.1.0:
+    resolution: {integrity: sha512-LUHFPKzbEWyXNe7WmwNlt8vjJlUbwzswR4hctv3hqS0CyEeCpm67Qg8my9dQ4S5LpkRA6v+2GC8DLX3HaK4Xhg==}
+    dependencies:
+      '@fastify/csrf': 5.1.0
+      '@fastify/error': 3.0.0
+      fastify-plugin: 3.0.1
+    dev: false
+
+  /@fastify/csrf/5.1.0:
+    resolution: {integrity: sha512-f48bp4yQ12/oq6mhc2DjH43CCVP+XPSdJFaDzGMjJgaJ05w6rYtf0qoHMHw2wvCSBKQ/vgK+wI7pVr/jjWV89g==}
+    dev: false
+
   /@fastify/deepmerge/1.1.0:
     resolution: {integrity: sha512-E8Hfdvs1bG6u0N4vN5Nty6JONUfTdOciyD5rn8KnEsLKIenvOVcr210BQR9t34PRkNyjqnMLGk3e0BsaxRdL+g==}
     dev: false
 
   /@fastify/error/3.0.0:
     resolution: {integrity: sha512-dPRyT40GiHRzSCll3/Jn2nPe25+E1VXc9tDwRAIKwFCxd5Np5wzgz1tmooWG3sV0qKgrBibihVoCna2ru4SEFg==}
+    dev: false
+
+  /@fastify/etag/4.1.0:
+    resolution: {integrity: sha512-m86DX9P4ynoIPq2/8T/FZtL/z2gMdVOiDUXxutIIFpR0iBHBvc65pl/H0pjB4ctVtQQCSi7ejPmAynNFNtO8mQ==}
+    dependencies:
+      fastify-plugin: 4.2.1
     dev: false
 
   /@fastify/fast-json-stringify-compiler/4.0.0:

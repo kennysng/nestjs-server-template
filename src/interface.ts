@@ -68,6 +68,7 @@ export interface IMasterConfig extends IBaseConfig {
     perEndpoint: boolean;
   };
   auth: {
+    cookie?: ITokenOptions;
     access_token: ITokenOptions;
     refresh_token: ITokenOptions;
   };
