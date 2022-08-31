@@ -24,9 +24,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     daoHelper: DaoHelper;
     start: number;
-    device?: string;
-    access?: string;
-    refresh?: string;
+    extra: any;
     jwtPayload?: IJwtPayload;
     user?: IUser;
     mapper?: IMapper;
@@ -58,7 +56,8 @@ export default [
     next: (err?: Error) => void,
   ) {
     fastify.addHook('onRequest', (req, _, next) => {
-      req.device = req.headers[deviceTokenKey] as string;
+      if (!req.extra) req.extra = {};
+      req.extra.device = req.headers[deviceTokenKey] as string;
       next();
     });
     next();
@@ -72,7 +71,7 @@ export default [
   ) {
     fastify.addHook('onRequest', (req, _, next) => {
       if (req.headers.authorization) {
-        req.access = req.headers.authorization.substring(7);
+        req.extra.access = req.headers.authorization.substring(7);
       }
       next();
     });
@@ -86,7 +85,7 @@ export default [
     next: (err?: Error) => void,
   ) {
     fastify.addHook('onRequest', (req, _, next) => {
-      req.refresh = req.headers[refreshTokenKey] as string;
+      req.extra.refresh = req.headers[refreshTokenKey] as string;
       next();
     });
     next();
@@ -113,10 +112,13 @@ export default [
     next: (err?: Error) => void,
   ) {
     fastify.addHook('onRequest', async (req) => {
-      if (req.access && req.mapper.plugins?.find((p) => p === 'authenticate')) {
-        if (!req.device) throw new BadRequest('Missing Device Token');
+      if (
+        req.extra.access &&
+        req.mapper.plugins?.find((p) => p === 'authenticate')
+      ) {
+        if (!req.extra.device) throw new BadRequest('Missing Device Token');
         req.jwtPayload = (await verify(
-          req.access,
+          req.extra.access,
           config.auth.access_token.secret,
         )) as IJwtPayload;
       }
@@ -182,9 +184,10 @@ export default [
     next: (err?: Error) => void,
   ) {
     fastify.addHook<string>('onSend', (req, res, result, next) => {
-      if (process.env.NODE_ENV === 'development') {
+      const result_ = JSON.parse(result);
+      if (process.env.NODE_ENV === 'development' && result_.error) {
         res.header('content-type', 'text/html');
-        return next(null, template(JSON.parse(result)));
+        return next(null, template(result_));
       }
       next();
     });

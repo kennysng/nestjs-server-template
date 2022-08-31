@@ -88,22 +88,24 @@ function masterMain(config: IMasterConfig) {
     });
 
     // health check
-    app.get('/health', async (request, reply): Promise<IResponse> => {
+    app.get('/health', async (req, res): Promise<IResponse> => {
       // no cache
-      reply.header('cache-control', 'no-cache, no-store');
+      res.header('cache-control', 'no-cache, no-store');
 
       const keys = uniq(mapper.map((m) => m.queue));
       let statusCode = httpStatus.OK;
       const result = await Promise.all(
         keys.map<Promise<IResponse>>(async (key) => {
           const start = Date.now();
-          const queue = connectQueue('server', key, redisConfig, request.log);
+          const queue = connectQueue('server', key, redisConfig, req.log);
           const data: IRequest = {
             method: 'HEALTH',
             url: '*',
-            headers: request.headers,
-            query: {},
-            params: {},
+            headers: req.headers,
+            query: req.query,
+            params: req.params,
+            user: req.user,
+            extra: req.extra,
           };
           const job: Job<IRequest> = await queue.createJob(data).save();
           const result = await wait(queue, job, 3 * 1000); // healthy server can return within 3 seconds
@@ -116,7 +118,7 @@ function masterMain(config: IMasterConfig) {
       );
       const unavailable = result.find((r) => r.statusCode !== httpStatus.OK);
       if (unavailable) statusCode = httpStatus.SERVICE_UNAVAILABLE;
-      reply.status(statusCode);
+      res.status(statusCode);
       return unavailable
         ? /* eslint-disable */ {
           statusCode,
@@ -140,6 +142,8 @@ function masterMain(config: IMasterConfig) {
         headers: req.headers,
         query: req.query,
         params: req.params,
+        user: req.user,
+        extra: req.extra,
       };
 
       const queue = connectQueue(

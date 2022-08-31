@@ -117,23 +117,24 @@ export type HttpMethods =
   | 'PATCH';
 /* eslint-enable */
 
-interface IBaseRequest<Q, P> {
+interface IBaseRequest<Q, P, E> {
   method: HttpMethods;
   url: string;
   headers: Record<string, string | string[]>;
   query: Q;
   params: P;
   user?: IUser;
+  extra: E;
 }
 
-export interface IBodyRequest<B = any, Q = any, P = any>
-  extends IBaseRequest<Q, P> {
+export interface IBodyRequest<B = any, Q = any, P = any, E = any>
+  extends IBaseRequest<Q, P, E> {
   method: 'ALL' | 'POST' | 'PUT' | 'PATCH';
   body?: B;
 }
 
-export type IRequest<B = any, Q = any, P = any> =
-  | IBaseRequest<Q, P>
+export type IRequest<B = any, Q = any, P = any, E = any> =
+  | IBaseRequest<Q, P, E>
   | IBodyRequest<B, Q, P>;
 
 export type IResponse<T = any> = IResult<T> | IError<T>;
