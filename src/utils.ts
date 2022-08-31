@@ -174,7 +174,7 @@ export function matchUrl(method: string, url: URL, ...mappers: IMapper[]) {
 }
 
 export function applyCache(
-  reply: FastifyReply,
+  res: FastifyReply,
   { private: private_, noCache, noStore, maxAge, lastModified }: ICache,
 ) {
   let cache = '';
@@ -192,12 +192,12 @@ export function applyCache(
       cache,
       `${private_ === false ? 's-maxage' : 'max-age'}=${maxAge}`,
     );
-    reply.header('expires', DateTime.local().plus({ second: maxAge }).toHTTP());
+    res.header('expires', DateTime.local().plus({ second: maxAge }).toHTTP());
   }
   if (typeof lastModified === 'string') {
-    reply.header('last-modified', lastModified);
+    res.header('last-modified', lastModified);
   }
-  reply.header('cache-control', cache);
+  res.header('cache-control', cache);
 }
 
 export function fixUrl(url: string) {
