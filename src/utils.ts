@@ -154,7 +154,7 @@ export function sign(
   secretOrPrivateKey: Secret,
   options?: SignOptions,
 ) {
-  return new Promise((resolve, reject) => {
+  return new Promise<string>((resolve, reject) => {
     sign_(payload, secretOrPrivateKey, options, (e, token: string) => {
       return e ? reject(e) : resolve(token);
     });
