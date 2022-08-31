@@ -1,0 +1,14 @@
+<html>
+  <head>
+    <title>{{error}}</title>
+  </head>
+  <body>
+    <h1>{{statusCode}} - {{error}}</h1>
+    <p style="white-space:pre-wrap">{{stack}}</p>
+    {% if extra %}
+    <div style="border-style:inset;padding:10px">
+      <code style="white-space:pre-wrap">{{extra|json(2)}}</code>
+    </div>
+    {% endif %}
+  </body>
+</html>

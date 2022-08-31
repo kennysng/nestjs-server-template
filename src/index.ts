@@ -77,8 +77,7 @@ function masterMain(config: IMasterConfig) {
       const result: IError = {
         statusCode,
         error: e.message,
-        elapsed: Date.now() - req.start,
-        // extra: e.extra,
+        extra: e['extra'],
       };
       if (NODE_ENV === 'development') {
         result.stack = e.stack;
@@ -121,7 +120,7 @@ function masterMain(config: IMasterConfig) {
       return unavailable
         ? /* eslint-disable */ {
           statusCode,
-          error: httpStatus['500_NAME'],
+          error: httpStatus['503_NAME'],
         }
         : {
           statusCode,

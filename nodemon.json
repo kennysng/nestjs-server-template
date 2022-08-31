@@ -3,7 +3,7 @@
     "node_modules",
     "configs/template.yaml"
   ],
-  "ext": "yaml,json,ts",
+  "ext": "yaml,json,ts,html",
   "exec": "pnpm ts-node src/index",
   "restartable": "rs"
 }
