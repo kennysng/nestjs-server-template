@@ -9,7 +9,7 @@
     "build": "rimraf dist && tsc",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist",
-    "start:dev": "nodemon",
+    "start:dev": "nodemon -D",
     "lint": "ts-node tools/sort-imports.ts && eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest"
   },

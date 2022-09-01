@@ -1,7 +1,8 @@
 {
   "ignore": [
+    "configs/template.yaml",
     "node_modules",
-    "configs/template.yaml"
+    "package.json"
   ],
   "ext": "yaml,json,ts,html",
   "exec": "pnpm ts-node src/index",
