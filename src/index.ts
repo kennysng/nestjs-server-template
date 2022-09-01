@@ -150,10 +150,21 @@ function masterMain(config: IMasterConfig) {
       const unavailable = result.find((r) => r.statusCode !== httpStatus.OK);
       if (unavailable) statusCode = httpStatus.SERVICE_UNAVAILABLE;
       res.status(statusCode);
-      return {
-        statusCode,
-        result,
-      };
+
+      if (unavailable) {
+        statusCode = httpStatus.SERVICE_UNAVAILABLE;
+        res.status(statusCode);
+        return {
+          statusCode,
+          error: httpStatus['503_NAME'],
+          extra: result,
+        };
+      } else {
+        return {
+          statusCode,
+          result,
+        };
+      }
     });
 
     // RESTful api call
