@@ -97,10 +97,11 @@ export default [
     config: IMasterConfig,
     next: (err?: Error) => void,
   ) {
-    fastify.addHook('onRequest', async (req) => {
+    fastify.addHook('onRequest', (req, res, next) => {
       const url = new URL(req.url, `http://localhost:${config.port}`);
       const mapper = (req.mapper = matchUrl(req.method, url, ...config.mapper));
-      if (!mapper) throw new NotFound();
+      if (!mapper && url.pathname !== '/health') throw new NotFound();
+      next();
     });
     next();
   }),
