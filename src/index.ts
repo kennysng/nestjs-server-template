@@ -39,6 +39,9 @@ const argv = minimist(process.argv.slice(2));
 const NODE_ENV = (process.env.NODE_ENV =
   argv.env || argv.E || process.env.NODE_ENV || 'development');
 
+const debug = (process.env.DEBUG =
+  argv.debug || argv.D || process.env.NODE_ENV === 'deveopment');
+
 function masterMain(config: IMasterConfig) {
   logSection('Initialize Server', logger('Server'), async () => {
     const port = (config.port = config.port || 8080);
@@ -97,9 +100,7 @@ function masterMain(config: IMasterConfig) {
         error: e.message,
         extra: e['extra'],
       };
-      if (NODE_ENV === 'development') {
-        result.stack = e.stack;
-      }
+      if (debug) result.stack = e.stack;
 
       res.status(statusCode);
       res.send(result);

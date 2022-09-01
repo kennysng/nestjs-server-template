@@ -186,7 +186,7 @@ export default [
   ) {
     fastify.addHook<string>('onSend', (req, res, result, next) => {
       const result_ = JSON.parse(result);
-      if (process.env.NODE_ENV === 'development' && result_.error) {
+      if (process.env.DEBUG && result_.error) {
         res.header('content-type', 'text/html');
         return next(null, template(result_));
       }
