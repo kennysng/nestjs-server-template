@@ -116,38 +116,42 @@ function masterMain(config: IMasterConfig) {
       const result = await Promise.all(
         keys.map<Promise<IResponse>>(async (key) => {
           const start = Date.now();
-          const queue = connectQueue('server', key, redisConfig, req.log);
-          const data: IRequest = {
-            method: 'HEALTH',
-            url: '*',
-            headers: req.headers,
-            query: req.query,
-            params: req.params,
-            user: req.user,
-            extra: req.extra,
-          };
-          const job: Job<IRequest> = await queue.createJob(data).save();
-          const result = await wait(queue, job, 3 * 1000); // healthy server can return within 3 seconds
-          return {
-            ...result,
-            queue: key,
-            elapsed: Date.now() - start,
-          };
+          try {
+            const queue = connectQueue('server', key, redisConfig, req.log);
+            const data: IRequest = {
+              method: 'HEALTH',
+              url: '*',
+              headers: req.headers,
+              query: req.query,
+              params: req.params,
+              user: req.user,
+              extra: req.extra,
+            };
+            const job: Job<IRequest> = await queue.createJob(data).save();
+            const result = await wait(queue, job, 3 * 1000); // healthy server can return within 3 seconds
+            return {
+              ...result,
+              queue: key,
+              elapsed: Date.now() - start,
+            };
+          } catch (e) {
+            return {
+              statusCode: e.statusCode || httpStatus.INTERNAL_SERVER_ERROR,
+              error: e.message,
+              stack: e.stack,
+              extra: e.extra,
+              elapsed: Date.now() - start,
+            };
+          }
         }),
       );
       const unavailable = result.find((r) => r.statusCode !== httpStatus.OK);
       if (unavailable) statusCode = httpStatus.SERVICE_UNAVAILABLE;
       res.status(statusCode);
-      return unavailable
-        ? /* eslint-disable */ {
-          statusCode,
-          error: httpStatus['503_NAME'],
-        }
-        : {
-          statusCode,
-          result,
-        }; /* eslint-enable */
-
+      return {
+        statusCode,
+        result,
+      };
     });
 
     // RESTful api call
