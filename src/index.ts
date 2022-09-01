@@ -42,6 +42,8 @@ const NODE_ENV = (process.env.NODE_ENV =
 const debug = (process.env.DEBUG =
   argv.debug || argv.D || process.env.NODE_ENV === 'deveopment');
 
+if (debug) logger().warn('Start in debug mode');
+
 function masterMain(config: IMasterConfig) {
   logSection('Initialize Server', logger('Server'), async () => {
     const port = (config.port = config.port || 8080);

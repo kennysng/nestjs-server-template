@@ -185,10 +185,14 @@ export default [
     next: (err?: Error) => void,
   ) {
     fastify.addHook<string>('onSend', (req, res, result, next) => {
-      const result_ = JSON.parse(result);
-      if (process.env.DEBUG && result_.error) {
-        res.header('content-type', 'text/html');
-        return next(null, template(result_));
+      if (process.env.DEBUG) {
+        const result_ = JSON.parse(result);
+        if (result_.error) {
+          res.header('content-type', 'text/html');
+          return next(null, template(result_));
+        } else {
+          return next(null, JSON.stringify(result_, null, 2));
+        }
       }
       next();
     });
