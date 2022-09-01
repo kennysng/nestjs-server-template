@@ -1,8 +1,6 @@
 import httpStatus = require('http-status');
 
-import { HeaderValidate, LastModified, Path, Queue } from '../decorator';
-
-let date: Date;
+import { Path, Queue } from '../decorator';
 
 @Queue()
 export default class DefaultQueue {
@@ -11,24 +9,11 @@ export default class DefaultQueue {
     return { statusCode: httpStatus.OK };
   }
 
-  @LastModified(() => {
-    if (!date) date = new Date();
-    return date;
-  })
-  @Path('GET', 'cached')
-  cachedPath() {
+  @Path('GET', 'test')
+  testPath() {
     return {
       statusCode: httpStatus.OK,
-      result: 'Hello LastModified!',
-    };
-  }
-
-  @HeaderValidate('x-hi-hi', 'Header')
-  @Path('GET', 'validate')
-  errorPath() {
-    return {
-      statusCode: httpStatus.OK,
-      result: 'Hello Validate!',
+      result: 'Hello, Test!',
     };
   }
 
@@ -36,7 +21,7 @@ export default class DefaultQueue {
   defaultPath() {
     return {
       statusCode: httpStatus.OK,
-      result: 'Hello Default!',
+      result: 'Hello, World!',
     };
   }
 }

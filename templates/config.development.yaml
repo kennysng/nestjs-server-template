@@ -30,3 +30,5 @@ redis:
 mapper:
   - path: /*
     queue: 'default'
+  - path: /test
+    queue: 'default'

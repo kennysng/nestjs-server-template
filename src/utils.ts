@@ -161,14 +161,30 @@ export function sign(
   });
 }
 
-export function matchUrl(method: string, url: URL, ...mappers: IMapper[]) {
+export function matchUrl(method: string, url: URL, ...mappers: IMapper[]);
+export function matchUrl(
+  method: string,
+  url: URL,
+  exactMatch: boolean,
+  ...mappers: IMapper[]
+);
+export function matchUrl(method: string, url: URL, ...args: any[]) {
+  if (typeof args[0] !== 'boolean') {
+    return (
+      matchUrl(method, url, true, ...args) ||
+      matchUrl(method, url, false, ...args)
+    );
+  }
+
+  const exactMatch = args[0] as boolean;
+  const mappers = args.slice(1) as IMapper[];
   for (const mapper of mappers) {
     const { method: method_ = 'ALL', path } = mapper;
     const REQ_METHOD = method.toLocaleUpperCase();
     const MAP_METHOD = method_.toLocaleUpperCase();
     if (REQ_METHOD === MAP_METHOD || 'ALL' === MAP_METHOD) {
       const { matches } = match(path, url.pathname);
-      if (matches) return mapper;
+      if (matches && (!exactMatch || path === url.pathname)) return mapper;
     }
   }
 }

@@ -42,7 +42,7 @@ const NODE_ENV = (process.env.NODE_ENV =
 const debug = (process.env.DEBUG =
   argv.debug || argv.D || process.env.NODE_ENV === 'deveopment');
 
-if (debug) logger().warn('Start in debug mode');
+if (debug) logger().debug('Start in debug mode');
 
 function masterMain(config: IMasterConfig) {
   logSection('Initialize Server', logger('Server'), async () => {
@@ -75,7 +75,8 @@ function masterMain(config: IMasterConfig) {
         max: config.limit.count,
         timeWindow: config.limit.window,
         keyGenerator: (req) => {
-          const url = new URL(req.url).pathname;
+          const url = new URL(req.url, `${req.protocol}://${req.hostname}/`)
+            .pathname;
           const ip =
             (req.headers['x-real-ip'] as string) || // nginx
             (req.headers['x-client-ip'] as string) || // apache
@@ -174,7 +175,7 @@ function masterMain(config: IMasterConfig) {
 
       const data: IRequest = {
         method: req.method as HttpMethods,
-        url: new URL(req.url).pathname,
+        url: new URL(req.url, `${req.protocol}://${req.hostname}/`).pathname,
         headers: req.headers,
         query: req.query,
         params: req.params,
