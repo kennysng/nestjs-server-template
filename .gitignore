@@ -40,9 +40,12 @@ coverage
 *.backup
 
 # local files
-configs/*local*.yaml
+configs/*.yaml
+src/mapper.json
 .local
 *.env
+keys/*.ppk
+keys/*.pub
 
 # frontend
 frontend

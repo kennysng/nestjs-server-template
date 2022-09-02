@@ -1,7 +1,10 @@
 {
-  "watch": [
-    "configs/**/*.yaml"
+  "ignore": [
+    "configs/template.yaml",
+    "node_modules",
+    "package.json"
   ],
-  "exec": "pnpm start:dev",
+  "ext": "yaml,json,ts,html",
+  "exec": "pnpm ts-node src/index",
   "restartable": "rs"
 }

@@ -22,7 +22,7 @@ export function stringify({
   } else if (imports.length) {
     imports_ = `${allAs ? `${allAs}, ` : ''}{ ${imports.join(', ')} }`;
   } else {
-    imports_ = allAs;
+    imports_ = allAs || '';
   }
   const module_ = fallback ? `= require('${module}')` : `from '${module}'`;
   return `${import_} ${imports_} ${module_};`;
@@ -80,7 +80,7 @@ export function parse(lines: string[]): IImport {
 
   if (
     (asterisk && !allAs) ||
-    (type && allAs) ||
+    (type && allAs && !fallback) ||
     (asterisk && imports.length) ||
     (asterisk && fallback)
   ) {

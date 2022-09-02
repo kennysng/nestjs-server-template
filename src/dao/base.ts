@@ -1,4 +1,5 @@
-import type { LoggerService } from '@nestjs/common';
+import type { IUser, Options } from '../interface';
+import type { Logger } from 'pino';
 import type {
   FindOptions,
   Includeable,
@@ -7,34 +8,47 @@ import type {
 } from 'sequelize';
 import type { Model, Sequelize } from 'sequelize-typescript';
 
-import { HttpStatus } from '@nestjs/common';
-import deepmerge = require('deepmerge');
-import EventEmitter = require('events');
+import capitalize from 'capitalize';
+import deepmerge from 'deepmerge';
+import { EventEmitter } from 'events';
+import { InternalServerError, NotFound } from 'http-errors';
 
-import { CustomException } from 'src/classes/exceptions/CustomException';
-import { logSection } from 'src/utils';
-import { inTransaction } from 'src/utils/sequelize';
-import { Logger as GoenLogger } from '../../logger';
+import logger from '../logger';
+import { inTransaction, logSection, Nullable } from '../utils';
 
-export type Options = {
-  logger?: LoggerService;
-  defaultInclude?: Includeable[];
-  deleteMode?: 'deletedAt' | 'destroy';
-};
+// eslint-disable-next-line
+export type MyModel<T> = { new(): T } & typeof Model;
 
-export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
-  protected readonly logger: LoggerService;
+export class DaoHelper {
+  private readonly daos: Record<string, BaseDao<any>> = {};
+
+  constructor(private readonly sequelize: Sequelize) {}
+
+  get<M extends Model, T = BaseDao<M>>(model: MyModel<M>): T {
+    if (!this.daos[model.constructor.name]) {
+      this.daos[model.constructor.name] = new BaseDao(this.sequelize, model);
+    }
+    return this.daos[model.constructor.name] as unknown as T;
+  }
+
+  register<T extends Model>(model: MyModel<T>, dao: BaseDao<T>) {
+    this.daos[model.constructor.name] = dao;
+  }
+}
+
+export class BaseDao<T extends Model, ID = number> extends EventEmitter {
+  protected readonly logger: Logger;
   protected readonly defaultInclude: Includeable[];
   protected readonly deleteMode: 'deletedAt' | 'destroy';
 
   constructor(
     protected readonly sequelize: Sequelize,
-    protected readonly model: { new(): T } & typeof Model, // eslint-disable-line prettier/prettier
+    protected readonly model: MyModel<T>,
     options?: Options,
   ) {
     super();
 
-    this.logger = options?.logger || new GoenLogger(this.constructor.name);
+    this.logger = options?.logger || logger(this.constructor.name);
     this.defaultInclude = options?.defaultInclude || [];
     this.deleteMode = options?.deleteMode || 'deletedAt';
 
@@ -61,30 +75,36 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
    * create relationships
    * @param instances T[]
    * @param transaction sequelize.Transaction
+   * @param user IUser
    */
   protected async createRelationships(
     instances: T[],
     transaction: Transaction,
+    user?: IUser,
   ) {}
 
   /**
    * update relationships
    * @param instances T[]
    * @param transaction sequelize.Transaction
+   * @param user IUser
    */
   protected async updateRelationships(
     instances: T[],
     transaction: Transaction,
+    user?: IUser,
   ) {}
 
   /**
    * delete relationships
    * @param instances T[]
    * @param transaction sequelize.Transaction
+   * @param user IUser
    */
   protected async deleteRelationships(
     instances: T[],
     transaction: Transaction,
+    user?: IUser,
   ) {}
   /* eslint-enable @typescript-eslint/no-unused-vars */
   /* eslint-enable @typescript-eslint/no-empty-function */
@@ -94,6 +114,7 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
     callback: (
       type: 'create' | 'update',
       instances: T[],
+      user?: IUser,
     ) => void | Promise<void>,
   );
   public on(
@@ -102,35 +123,40 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
       type: 'create' | 'update',
       instances: T[],
       created?: T[],
+      user?: IUser,
     ) => void | Promise<void>,
   );
   public on(
     event: 'beforeCreate',
-    callback: (instances: T[]) => void | Promise<void>,
+    callback: (instances: T[], user?: IUser) => void | Promise<void>,
   );
   public on(
     event: 'afterCreate',
-    callback: (instances: T[], created?: T[]) => void | Promise<void>,
+    callback: (
+      instances: T[],
+      created?: T[],
+      user?: IUser,
+    ) => void | Promise<void>,
   );
   public on(
     event: 'afterFind',
-    callback: (instances: T[]) => void | Promise<void>,
+    callback: (instances: T[], user?: IUser) => void | Promise<void>,
   );
   public on(
     event: 'beforeUpdate',
-    callback: (instances: T[]) => void | Promise<void>,
+    callback: (instances: T[], user?: IUser) => void | Promise<void>,
   );
   public on(
     event: 'afterUpdate',
-    callback: (instances: T[]) => void | Promise<void>,
+    callback: (instances: T[], user?: IUser) => void | Promise<void>,
   );
   public on(
     event: 'beforeDestroy',
-    callback: (instances: T[]) => void | Promise<void>,
+    callback: (instances: T[], user?: IUser) => void | Promise<void>,
   );
   public on(
     event: 'afterDestroy',
-    callback: (instances: T[]) => void | Promise<void>,
+    callback: (instances: T[], user?: IUser) => void | Promise<void>,
   );
   public on(event: string, callback: (...args: any[]) => void | Promise<void>) {
     super.on(event, callback);
@@ -138,7 +164,7 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
   }
 
   public getPrimaryKey(instance: T) {
-    let id: ID | undefined = instance.id;
+    let id: Nullable<ID> = instance.id;
     if (!id) {
       id =
         (typeof instance.getDataValue === 'function' &&
@@ -161,37 +187,42 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
   /**
    * create instance
    * @param instance Partial<T>
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @param options sequelize.FindOptions
    * @returns T
    */
   async create(
     instance: Partial<T>,
+    user?: IUser,
     transaction?: Transaction,
     options?: FindOptions<T>,
   ): Promise<T>;
   /**
    * create instances
    * @param instance Array<Partial<T>>
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @param options sequelize.FindOptions
    * @returns T[]
    */
   async create(
     instances: Array<Partial<T>>,
+    user?: IUser,
     transaction?: Transaction,
     options?: FindOptions<T>,
   ): Promise<T[]>;
   async create(
     instances: Partial<T> | Array<Partial<T>>,
+    user?: IUser,
     transaction?: Transaction,
     options?: FindOptions<T>,
   ): Promise<T | T[]> {
     if (!transaction) {
       return this.inTransaction(async (transaction) =>
         Array.isArray(instances)
-          ? this.create(instances, transaction, options)
-          : this.create(instances, transaction, options),
+          ? this.create(instances, user, transaction, options)
+          : this.create(instances, user, transaction, options),
       );
     } else {
       // fix return type
@@ -207,23 +238,24 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
       // assign createdAt
       for (const instance of instances) {
         instance['createdAt'] = new Date();
+        instance['creator'] = instance['updater'] = { id: user.id };
       }
 
       // create
-      await this.emit('beforeSave', 'create', instances);
-      await this.emit('beforeCreate', instances);
+      await this.emit('beforeSave', 'create', instances, user);
+      await this.emit('beforeCreate', instances, user);
       const result = (await this.model.bulkCreate(instances, {
         transaction,
       })) as unknown as T[];
       for (let i = 0, length = instances.length; i < length; i += 1) {
         Object.assign(result[i], instances[i]);
       }
-      await this.emit('afterSave', 'create', instances, result);
-      await this.emit('afterCreate', instances, result);
+      await this.emit('afterSave', 'create', instances, result, user);
+      await this.emit('afterCreate', instances, result, user);
 
       // create relationships
       await logSection('createRelationships', this.logger, () => {
-        return this.createRelationships(result, transaction);
+        return this.createRelationships(result, transaction, user);
       });
 
       // find
@@ -232,13 +264,12 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
           try {
             return this.findById(
               this.getPrimaryKey(result[0]) as ID,
+              user,
               transaction,
               options,
             );
           } catch (e) {
-            CustomException.throw(`${this.constructor.name}.create`, e, {
-              statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-            });
+            throw new InternalServerError(capitalize.words(e.message));
           }
         } else {
           return result[0];
@@ -251,6 +282,7 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
             } as WhereOptions<T>,
             ...(options || {}),
           },
+          user,
           transaction,
         );
       } else {
@@ -262,25 +294,27 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
   /**
    * find multiple instances
    * @param options sequelize.FindOptions<T>
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @param scope string
    * @returns T[]
    */
   async find(
     options: FindOptions<T>,
+    user?: IUser,
     transaction?: Transaction,
     scope?: string,
   ): Promise<T[]> {
     if (!transaction) {
       return this.inTransaction((transaction) =>
-        this.find(options, transaction, scope),
+        this.find(options, user, transaction, scope),
       );
     } else {
       options.include = this.defaultInclude;
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
       const result = (await model_.findAll(options)) as unknown as T[];
-      if (result.length) await this.emit('afterFind', result);
+      if (result.length) await this.emit('afterFind', result, user);
       return result;
     }
   }
@@ -288,25 +322,27 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
   /**
    * find one instance
    * @param options sequelize.FindOptions<T>
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @param scope string
    * @returns T
    */
   async findOne(
     options: FindOptions<T>,
+    user?: IUser,
     transaction?: Transaction,
     scope?: string,
   ): Promise<T> {
     if (!transaction) {
       return this.inTransaction((transaction) =>
-        this.findOne(options, transaction, scope),
+        this.findOne(options, user, transaction, scope),
       );
     } else {
       options.include = this.defaultInclude;
       options.transaction = transaction;
       const model_ = scope ? this.model.scope(scope) : this.model;
       const result = (await model_.findOne(options)) as T;
-      if (result) await this.emit('afterFind', [result]);
+      if (result) await this.emit('afterFind', [result], user);
       return result;
     }
   }
@@ -314,27 +350,35 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
   /**
    * find instance by id
    * @param id whether number or string
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @param options sequelize.FindOptions<T>
    * @param scope string
    * @returns T
    */
-  async findById(id: ID, transaction?: Transaction, scope?: string): Promise<T>;
   async findById(
     id: ID,
+    user?: IUser,
+    transaction?: Transaction,
+    scope?: string,
+  ): Promise<T>;
+  async findById(
+    id: ID,
+    user?: IUser,
     transaction?: Transaction,
     options?: FindOptions<T>,
   ): Promise<T>;
   async findById(
     id: ID,
+    user?: IUser,
     transaction?: Transaction,
     optionsOrScope?: FindOptions<T> | string,
   ): Promise<T> {
     if (!transaction) {
       return this.inTransaction((transaction) =>
         typeof optionsOrScope === 'string'
-          ? this.findById(id, transaction, optionsOrScope)
-          : this.findById(id, transaction, optionsOrScope),
+          ? this.findById(id, user, transaction, optionsOrScope)
+          : this.findById(id, user, transaction, optionsOrScope),
       );
     } else {
       const model_ =
@@ -350,12 +394,9 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
       options.transaction = options.transaction || transaction;
       const result = (await model_.findOne(options)) as T;
       if (!result) {
-        CustomException.throw(
-          `${this.constructor.name}.findById`,
-          CustomException.e.ENTITY_NOT_FOUND,
-        );
+        throw new NotFound(`${this.model.constructor.name} Not Found`);
       }
-      await this.emit('afterFind', [result]);
+      await this.emit('afterFind', [result], user);
       return result;
     }
   }
@@ -363,26 +404,37 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
   /**
    * update instance
    * @param instance T
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @returns T
    */
-  async update(instance: T, transaction?: Transaction): Promise<T>;
+  async update(
+    instance: T,
+    user?: IUser,
+    transaction?: Transaction,
+  ): Promise<T>;
   /**
    * update instances
    * @param instance T[]
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @returns T[]
    */
-  async update(instances: T[], transaction?: Transaction): Promise<T[]>;
+  async update(
+    instances: T[],
+    user?: IUser,
+    transaction?: Transaction,
+  ): Promise<T[]>;
   async update(
     instances: T | T[],
+    user?: IUser,
     transaction?: Transaction,
   ): Promise<T | T[]> {
     if (!transaction) {
       return this.inTransaction(async (transaction) =>
         Array.isArray(instances)
-          ? this.update(instances, transaction)
-          : this.update(instances, transaction),
+          ? this.update(instances, user, transaction)
+          : this.update(instances, user, transaction),
       );
     } else if (Array.isArray(instances)) {
       // skip if empty
@@ -395,14 +447,15 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
       // assign updatedAt
       for (const instance of existingInst) {
         instance['updatedAt'] = new Date();
+        instance['updater'] = { id: user.id };
       }
 
       if (existingInst.length) {
-        await this.emit('beforeSave', 'update', existingInst);
-        await this.emit('beforeUpdate', existingInst);
+        await this.emit('beforeSave', 'update', existingInst, user);
+        await this.emit('beforeUpdate', existingInst, user);
       }
       const [created] = await Promise.all([
-        this.create(newInstances, transaction),
+        this.create(newInstances, user, transaction),
         ...existingInst.map(
           async (i) =>
             await this.model.update(i, {
@@ -412,12 +465,12 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
         ),
       ]);
       if (existingInst.length) {
-        await this.emit('afterSave', 'update', existingInst);
-        await this.emit('afterUpdate', existingInst);
+        await this.emit('afterSave', 'update', existingInst, user);
+        await this.emit('afterUpdate', existingInst, user);
 
         // update relationships
         await logSection('updateRelationships', this.logger, () =>
-          this.updateRelationships(existingInst, transaction),
+          this.updateRelationships(existingInst, transaction, user),
         );
       }
 
@@ -427,41 +480,67 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
             id: [...created, ...existingInst].map((i) => this.getPrimaryKey(i)),
           } as WhereOptions<T>,
         },
+        user,
         transaction,
       );
     } else if (!this.getPrimaryKey(instances)) {
-      return this.create(instances, transaction);
+      return this.create(instances, user, transaction);
     } else {
       instances['updatedAt'] = new Date();
+      instances['updater'] = { id: user.id };
 
-      await this.emit('beforeSave', 'update', [instances]);
-      await this.emit('beforeUpdate', [instances]);
+      await this.emit('beforeSave', 'update', [instances], user);
+      await this.emit('beforeUpdate', [instances], user);
       await this.model.update(instances, {
         where: { id: this.getPrimaryKey(instances) } as WhereOptions<T>,
         transaction,
       });
-      await this.emit('afterSave', 'update', [instances]);
-      await this.emit('afterUpdate', [instances]);
+      await this.emit('afterSave', 'update', [instances], user);
+      await this.emit('afterUpdate', [instances], user);
 
       // update relationships
       await logSection('updateRelationships', this.logger, () =>
-        this.updateRelationships([instances], transaction),
+        this.updateRelationships([instances], transaction, user),
       );
 
-      return this.findById(this.getPrimaryKey(instances), transaction);
+      return this.findById(this.getPrimaryKey(instances), user, transaction);
+    }
+  }
+
+  /**
+   * update entity's updatedAt
+   * @param id whether string or number
+   * @param user IUser
+   * @param transaction sequelize.Transaction
+   */
+  async touch(id: ID, user?: IUser, transaction?: Transaction) {
+    if (!transaction) {
+      return this.inTransaction((transaction) =>
+        this.touch(id, user, transaction),
+      );
+    }
+    const entity = await this.findById(id);
+    if ('updatedAt' in entity) {
+      entity['updatedAt'] = new Date();
+      await this.update(entity, user, transaction);
     }
   }
 
   /**
    * delete multiple instances
    * @param instances T[]
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @returns T[]
    */
-  async delete(instances: T[], transaction?: Transaction): Promise<T[]> {
+  async delete(
+    instances: T[],
+    user?: IUser,
+    transaction?: Transaction,
+  ): Promise<T[]> {
     if (!transaction) {
       return this.inTransaction((transaction) =>
-        this.delete(instances, transaction),
+        this.delete(instances, user, transaction),
       );
     } else if (!instances.length) {
       return [];
@@ -472,15 +551,17 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
             id: instances.map((i) => this.getPrimaryKey(i)).filter((id) => id),
           } as WhereOptions<T>,
         },
+        user,
         transaction,
       );
       for (const instance of instances) {
         instance['deletedAt'] = new Date();
+        instance['deleter'] = { id: user.id };
       }
 
       if (this.deleteMode === 'deletedAt') {
         if (instances.length) {
-          await this.emit('beforeDestroy', instances);
+          await this.emit('beforeDestroy', instances, user);
           await Promise.all(
             instances.map(
               async (i) =>
@@ -490,17 +571,17 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
                 }),
             ),
           );
-          await this.emit('afterDestroy', instances);
+          await this.emit('afterDestroy', instances, user);
         }
       } else if (instances.length) {
-        await this.emit('beforeDestroy', instances);
+        await this.emit('beforeDestroy', instances, user);
         await this.model.destroy({
           where: {
             id: targets.map((i) => this.getPrimaryKey(i)),
           } as WhereOptions<T>,
           transaction,
         });
-        await this.emit('afterDestroy', instances);
+        await this.emit('afterDestroy', instances, user);
       }
 
       if (instances.length) {
@@ -517,26 +598,30 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
   /**
    * delete instance by id
    * @param id whether number or string
+   * @param user IUser
    * @param transaction sequelize.Transaction
    * @returns T
    */
-  async deleteById(id: ID, transaction?: Transaction): Promise<T> {
+  async deleteById(
+    id: ID,
+    user?: IUser,
+    transaction?: Transaction,
+  ): Promise<T> {
     if (!transaction) {
       return this.inTransaction((transaction) =>
-        this.deleteById(id, transaction),
+        this.deleteById(id, user, transaction),
       );
     } else {
       let target: T;
       try {
-        target = await this.findById(id, transaction);
+        target = await this.findById(id, user, transaction);
       } catch (e) {
-        CustomException.throw(`${this.constructor.name}.deleteById`, e, {
-          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-        });
+        throw new InternalServerError(capitalize.words(e.message));
       }
       target['deletedAt'] = new Date();
+      target['deleter'] = { id: user.id };
 
-      await this.emit('beforeDestroy', [target]);
+      await this.emit('beforeDestroy', [target], user);
       if (this.deleteMode === 'deletedAt') {
         await this.model.update(target, {
           where: { id } as WhereOptions<T>,
@@ -548,7 +633,7 @@ export class BaseDaoService<T extends Model, ID = number> extends EventEmitter {
           transaction,
         });
       }
-      await this.emit('afterDestroy', [target]);
+      await this.emit('afterDestroy', [target], user);
 
       // delete relationships
       await logSection('deleteRelationships', this.logger, () =>
